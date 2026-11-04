@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Literal
 
-from src.config import Settings
+from src.config import MissingAPIKeyError, Settings
 from src.core.context import assemble_prompt
 from src.core.db import Database
 from src.core.models import Message, SearchHit, Thread
@@ -138,8 +138,28 @@ class ChatService:
             except Exception as e:
                 log.warning("Failed to remove thread %s from vector index: %s", thread_id, e)
 
-    async def messages(self, thread_id: str) -> list[Message]:
-        return await self.db.get_messages(thread_id)
+    async def messages(self, thread_id: str, limit: int | None = None) -> list[Message]:
+        return await self.db.get_messages(thread_id, limit=limit)
+
+    # ---------- change feed (cross-process sync between TUI and web) ----------
+
+    async def latest_message_id(self) -> int:
+        return await self.db.max_message_id()
+
+    async def messages_after(self, after_id: int) -> list[Message]:
+        return await self.db.messages_after(after_id)
+
+    async def threads_signature(self) -> tuple[int, float, int]:
+        return await self.db.threads_signature()
+
+    def missing_key(self, model: str) -> str | None:
+        """Name of the env var that must be set to use `model`, or None if it is usable."""
+        provider, _ = self.router.resolve(model)
+        try:
+            self.settings.require_key(provider)
+        except MissingAPIKeyError:
+            return f"{provider.upper()}_API_KEY"
+        return None
 
     # ---------- search ----------
 

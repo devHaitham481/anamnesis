@@ -1,0 +1,110 @@
+Screen {
+    layout: vertical;
+}
+
+#body {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 32;
+    border-right: solid $panel-lighten-2;
+    background: $surface;
+}
+
+#sidebar-title {
+    padding: 0 1;
+    text-style: bold;
+    color: $text-muted;
+    width: 100%;
+}
+
+#threads {
+    height: 1fr;
+    background: $surface;
+}
+
+#threads > ListItem {
+    padding: 0 1;
+}
+
+#threads > ListItem.current {
+    background: $primary 30%;
+    text-style: bold;
+}
+
+#main {
+    width: 1fr;
+}
+
+#toolbar {
+    height: auto;
+    padding: 0 1;
+}
+
+#model {
+    width: 22;
+}
+
+#status {
+    width: 1fr;
+    padding: 1 2;
+    color: $text-muted;
+}
+
+#status.warning {
+    color: $warning;
+}
+
+#chat {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#empty {
+    width: 100%;
+    padding: 2 4;
+    color: $text-muted;
+}
+
+.message {
+    height: auto;
+    margin: 1 0 0 0;
+    padding: 0 1;
+    border-left: thick $panel-lighten-2;
+}
+
+.message.user {
+    border-left: thick $accent;
+}
+
+.message.assistant {
+    border-left: thick $primary;
+}
+
+.message.note {
+    border-left: thick $secondary;
+    color: $text-muted;
+}
+
+.message.error {
+    border-left: thick $error;
+}
+
+.message-header {
+    text-style: bold;
+    color: $text-muted;
+}
+
+.message Markdown {
+    margin: 0;
+    padding: 0;
+}
+
+#prompt {
+    margin: 0 1 1 1;
+}
+
+.message Markdown > *:last-child {
+    margin-bottom: 0;
+}

@@ -36,12 +36,16 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["src*"]
 
+[tool.setuptools.package-data]
+"src.cli" = ["*.tcss"]
+"src.web" = ["static/*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = ["integration: hits real provider APIs (skipped when keys are missing)"]
-filterwarnings = ["ignore::UserWarning:pydantic.*"]
+filterwarnings = ["error::RuntimeWarning", "ignore::UserWarning:pydantic.*"]
 
 [tool.ruff]
 line-length = 100

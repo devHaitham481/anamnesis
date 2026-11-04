@@ -15,3 +15,12 @@
 - **`src/core/context.py`:** `assemble_prompt()` = one system message (prompt + retrieved snippets) + recent history within a char budget, always starting on a user turn.
 - **`src/core/chat.py`:** `ChatService` — single orchestrator for TUI and web: persists user msg → retrieves cross-thread snippets (excluding in-window history, min cosine 0.6, calibrated on bge-small) → streams via router → persists assistant msg (partial + note if interrupted) → indexes. Degrades gracefully to keyword-only memory if the embedder can't load; `backfill_index()` catches up on start.
 - **Tests:** 26 new (db, vector, context, chat) incl. <50 ms latency checks for DB lookups and vector search.
+
+## 2026-11-05 — Sprint 3: Terminal UI
+
+- **`src/cli/app.py`** (`python -m src.cli` / `nexus`): Textual app with thread sidebar, model `Select` + `Ctrl+T` toggle, streaming Markdown chat canvas (`Markdown.get_stream`), `Ctrl+N` new thread. Talks only to `ChatService` (no direct DB access). Logs to `<data_dir>/nexus.log` so nothing corrupts the terminal.
+- **Slash commands** (`src/cli/commands.py`): `/help /new /model /history /search /open N /rename /delete (confirm) /quit`.
+- **Live sync:** polls the service change feed (message ids + thread signature) every second so messages/threads written by the web UI or another terminal appear automatically; handles deletion of the open thread elsewhere.
+- **Robustness:** missing API key → inline guidance, input preserved, no request sent; provider errors shown inline; switching threads mid-stream keeps the stream persisting.
+- **Bug caught by tests:** `MarkdownStream.write` is a coroutine — un-awaited it rendered nothing. Fixed, and pytest now treats `RuntimeWarning` as an error. Verified visually via SVG screenshot.
+- **Tests:** 11 pilot-driven TUI tests + 8 command-parser tests.

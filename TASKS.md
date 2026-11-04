@@ -25,9 +25,9 @@
 
 ### Sprint 3: Terminal UI (TUI)
 
-- [ ] Create Textual TUI app shell in `/src/cli/app.py`.
-- [ ] Implement active thread list sidebar and real-time streaming chat canvas.
-- [ ] Add model switching dropdown/hotkey (Claude ↔ Gemini).
+- [x] Create Textual TUI app shell in `/src/cli/app.py`.
+- [x] Implement active thread list sidebar and real-time streaming chat canvas.
+- [x] Add model switching dropdown/hotkey (Claude ↔ Gemini).
 
 ### Sprint 4: Web Dashboard & Sync
 
