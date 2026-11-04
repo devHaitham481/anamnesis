@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 
 DEFAULT_CLAUDE_MODEL = "anthropic/claude-sonnet-5-5"
 DEFAULT_GEMINI_MODEL = "gemini/gemini-2.5-flash"
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
+DEFAULT_DATA_DIR = Path.home() / ".nexus-ai"
 
 
 class MissingAPIKeyError(RuntimeError):
@@ -24,6 +26,23 @@ class Settings(BaseModel):
     gemini_api_key: SecretStr | None = None
     claude_model: str = DEFAULT_CLAUDE_MODEL
     gemini_model: str = DEFAULT_GEMINI_MODEL
+    default_model: str = "claude"
+
+    data_dir: Path = DEFAULT_DATA_DIR
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    rag_enabled: bool = True
+    rag_top_k: int = 4
+    rag_min_score: float = 0.6
+    history_limit: int = 40
+    sync_interval: float = 1.0
+
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / "nexus.db"
+
+    @property
+    def vector_path(self) -> Path:
+        return self.data_dir / "vectors"
 
     def require_key(self, provider: str) -> str:
         key = {"anthropic": self.anthropic_api_key, "gemini": self.gemini_api_key}.get(provider)
@@ -37,6 +56,12 @@ def _secret(value: str | None) -> SecretStr | None:
     return SecretStr(value) if value and value.strip() else None
 
 
+def _bool(value: str | None, default: bool) -> bool:
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def load_settings(
     env_file: str | Path | None = ".env",
     environ: Mapping[str, str] | None = None,
@@ -47,9 +72,21 @@ def load_settings(
         file_values = dict(dotenv_values(env_file))
     env = {**file_values, **(os.environ if environ is None else environ)}
 
+    def get(name: str) -> str | None:
+        value = env.get(name)
+        return value.strip() if value and value.strip() else None
+
+    defaults = Settings()
     return Settings(
         anthropic_api_key=_secret(env.get("ANTHROPIC_API_KEY")),
         gemini_api_key=_secret(env.get("GEMINI_API_KEY")),
-        claude_model=env.get("NEXUS_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
-        gemini_model=env.get("NEXUS_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+        claude_model=get("NEXUS_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
+        gemini_model=get("NEXUS_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+        default_model=get("NEXUS_DEFAULT_MODEL") or defaults.default_model,
+        data_dir=Path(get("NEXUS_DATA_DIR") or DEFAULT_DATA_DIR).expanduser(),
+        embedding_model=get("NEXUS_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL,
+        rag_enabled=_bool(env.get("NEXUS_RAG"), defaults.rag_enabled),
+        rag_top_k=int(get("NEXUS_RAG_TOP_K") or defaults.rag_top_k),
+        rag_min_score=float(get("NEXUS_RAG_MIN_SCORE") or defaults.rag_min_score),
+        history_limit=int(get("NEXUS_HISTORY_LIMIT") or defaults.history_limit),
     )

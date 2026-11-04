@@ -7,3 +7,11 @@
 - **Router (`src/providers/router.py`):** `ProviderRouter` (alias `ProviderManager`) resolves `claude`/`gemini` aliases or `anthropic/…`/`gemini/…` strings, injects the key, and normalizes LiteLLM output into `CompletionResult` / `StreamChunk` (`src/providers/models.py`). Completion function is injectable for testing.
 - **Tests:** 16 unit tests (config + router via LiteLLM `mock_response`, no network). 4 live integration tests for Claude & Gemini (complete + stream) are **skipped** — no `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` in the environment. Add them to `.env` and run `pytest -m integration`.
 - **Open item:** default model IDs (`anthropic/claude-sonnet-5-5`, `gemini/gemini-2.5-flash`) are unverified against live APIs until keys are provided.
+
+## 2026-11-05 — Sprint 2: Local Memory & Context
+
+- **`src/core/db.py`:** async SQLite (`aiosqlite`, WAL, FK cascade) with `providers`, `threads`, `messages` tables + FTS5 keyword index kept in sync by triggers. Monotonic message ids enable cross-process change polling (`messages_after`, `threads_signature`).
+- **`src/core/vector.py`:** LanceDB index (cosine) keyed by message id. Default embedder is local `fastembed` (`BAAI/bge-small-en-v1.5`, ~10 ms/embed, cached under `<data_dir>/models`); `HashEmbedder` for tests. Auto-rebuilds if embedding dimension changes.
+- **`src/core/context.py`:** `assemble_prompt()` = one system message (prompt + retrieved snippets) + recent history within a char budget, always starting on a user turn.
+- **`src/core/chat.py`:** `ChatService` — single orchestrator for TUI and web: persists user msg → retrieves cross-thread snippets (excluding in-window history, min cosine 0.6, calibrated on bge-small) → streams via router → persists assistant msg (partial + note if interrupted) → indexes. Degrades gracefully to keyword-only memory if the embedder can't load; `backfill_index()` catches up on start.
+- **Tests:** 26 new (db, vector, context, chat) incl. <50 ms latency checks for DB lookups and vector search.

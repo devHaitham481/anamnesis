@@ -19,9 +19,9 @@
 
 ### Sprint 2: Local Memory & Context
 
-- [ ] Create SQLite database manager (`/src/core/db.py`) for thread logging.
-- [ ] Set up LanceDB embedding indexer (`/src/core/vector.py`).
-- [ ] Build RAG context-assembly function to inject history into new prompts.
+- [x] Create SQLite database manager (`/src/core/db.py`) for thread logging.
+- [x] Set up LanceDB embedding indexer (`/src/core/vector.py`).
+- [x] Build RAG context-assembly function to inject history into new prompts.
 
 ### Sprint 3: Terminal UI (TUI)
 
