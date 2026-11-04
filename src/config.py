@@ -35,6 +35,8 @@ class Settings(BaseModel):
     rag_min_score: float = 0.6
     history_limit: int = 40
     sync_interval: float = 1.0
+    auth_token: SecretStr | None = None
+    allowed_hosts: tuple[str, ...] = ()
 
     @property
     def db_path(self) -> Path:
@@ -89,4 +91,8 @@ def load_settings(
         rag_top_k=int(get("NEXUS_RAG_TOP_K") or defaults.rag_top_k),
         rag_min_score=float(get("NEXUS_RAG_MIN_SCORE") or defaults.rag_min_score),
         history_limit=int(get("NEXUS_HISTORY_LIMIT") or defaults.history_limit),
+        auth_token=_secret(env.get("NEXUS_AUTH_TOKEN")),
+        allowed_hosts=tuple(
+            h.strip() for h in (get("NEXUS_ALLOWED_HOSTS") or "").split(",") if h.strip()
+        ),
     )

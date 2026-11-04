@@ -161,3 +161,17 @@ async def test_provider_error_is_shown(service: ChatService, fake_llm: FakeLLM) 
         await submit(pilot, app, "hello")
         await wait_until(pilot, lambda: any("rate limited" in v.content for v in views(app)))
         assert app._streaming is None
+
+
+async def test_app_creates_and_closes_its_own_service(settings, fake_llm) -> None:  # type: ignore[no-untyped-def]
+    """The production path: NexusApp builds ChatService from settings (RAG off -> no model DL)."""
+    s = settings.model_copy(update={"rag_enabled": False})
+    app = NexusApp(s)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
+        assert app.service is not None and app.service.index is None
+        assert "keyword memory only" in str(app.query_one("#status").render())
+        await pilot.press("ctrl+n")
+        await wait_until(pilot, lambda: len(list(app.query(ThreadItem))) == 1)
+    assert app.service.db._conn is None  # closed on exit
+    assert s.db_path.exists()

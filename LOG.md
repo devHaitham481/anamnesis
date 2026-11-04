@@ -24,3 +24,12 @@
 - **Robustness:** missing API key → inline guidance, input preserved, no request sent; provider errors shown inline; switching threads mid-stream keeps the stream persisting.
 - **Bug caught by tests:** `MarkdownStream.write` is a coroutine — un-awaited it rendered nothing. Fixed, and pytest now treats `RuntimeWarning` as an error. Verified visually via SVG screenshot.
 - **Tests:** 11 pilot-driven TUI tests + 8 command-parser tests.
+
+## 2026-11-05 — Sprint 4: Web Dashboard & Sync
+
+- **`src/web/main.py`** (`python -m src.web` / `uvicorn src.web.main:app`): REST (`/api/health`, `/api/models`, `/api/threads` CRUD, `/api/threads/{id}/messages`, `/api/search`), SSE turn streaming (`POST /api/threads/{id}/chat`), WebSocket `/ws` (send/ping; broadcasts `stream_start`/`delta`/`message`/`stream_end`/`threads_changed` to every browser).
+- **Cross-process sync:** a watcher polls the SQLite change feed and pushes writes from the TUI (or any process) to browsers; clients dedupe by message id.
+- **Security (local-first):** binds 127.0.0.1 by default; `TrustedHostMiddleware` (DNS-rebinding), WebSocket Origin check (cross-site WS hijacking), optional `NEXUS_AUTH_TOKEN` bearer auth for LAN/multi-device use.
+- **Frontend** (`src/web/static`, no build step): threads sidebar, live streaming, model select with missing-key banner, search, rename (double-click title), delete, deep links, reconnect with catch-up, light/dark, mobile drawer. Markdown renderer escapes all HTML first.
+- **Bugs caught by e2e (Playwright) test:** (1) null deref dropped the user bubble when a stream had started; (2) sending right after "+ New" went to the previous thread. Both fixed with regression coverage.
+- **Validated for real:** `python -m src.web` with real fastembed embeddings + curl smoke test; `python -m src.cli` launched in a pty against the same data dir.

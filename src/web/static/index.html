@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NexusAI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-head">
+        <span class="brand">NexusAI</span>
+        <button id="new-thread" class="btn primary" title="New thread (Ctrl+Alt+N)">+ New</button>
+      </div>
+      <form id="search-form" role="search">
+        <input id="search" type="search" placeholder="Search all chats…" autocomplete="off">
+      </form>
+      <div id="search-results" hidden>
+        <div class="list-head"><span>Results</span><button id="clear-search" class="link">Close</button></div>
+        <ul id="search-list"></ul>
+      </div>
+      <ul id="threads" aria-label="Threads"></ul>
+      <div id="conn" class="conn"><span class="dot"></span><span id="conn-text">Connecting…</span></div>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <button id="toggle-sidebar" class="btn icon" aria-label="Toggle threads">☰</button>
+        <h1 id="thread-title" title="Double-click to rename">New chat</h1>
+        <select id="model" aria-label="Model"></select>
+      </header>
+      <div id="banner" class="banner" hidden></div>
+      <section id="messages" aria-live="polite">
+        <div id="empty" class="empty">
+          <h2>Start a conversation</h2>
+          <p>Chats are stored locally and shared with the terminal app in real time.</p>
+        </div>
+      </section>
+      <form id="composer">
+        <textarea id="input" rows="1" placeholder="Message NexusAI…  (Enter to send, Shift+Enter for newline)"></textarea>
+        <button id="send" class="btn primary" type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+  <script src="markdown.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

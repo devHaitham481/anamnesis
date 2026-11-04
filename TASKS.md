@@ -31,5 +31,5 @@
 
 ### Sprint 4: Web Dashboard & Sync
 
-- [ ] Create FastAPI backend endpoints exposing threads, chat stream, and search.
-- [ ] Build minimalist web frontend connected to FastAPI via WebSockets.
+- [x] Create FastAPI backend endpoints exposing threads, chat stream, and search.
+- [x] Build minimalist web frontend connected to FastAPI via WebSockets.
