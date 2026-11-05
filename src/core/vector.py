@@ -8,6 +8,7 @@ import math
 import re
 import threading
 from collections.abc import Sequence
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -71,7 +72,9 @@ class VectorIndex:
         self.path = Path(path)
         self.embedder = embedder
         self.path.mkdir(parents=True, exist_ok=True)
-        self._db = lancedb.connect(str(self.path))
+        # Re-check the table version on every read so writes from the other process
+        # (TUI <-> web server) are visible immediately.
+        self._db = lancedb.connect(str(self.path), read_consistency_interval=timedelta(0))
         self._schema = pa.schema(
             [
                 ("message_id", pa.int64()),
@@ -108,17 +111,23 @@ class VectorIndex:
         if not msgs:
             return
         vectors = self.embedder.embed([m.content for m in msgs])
-        self._table.add(
-            [
-                {
-                    "message_id": m.id,
-                    "thread_id": m.thread_id,
-                    "role": m.role,
-                    "content": m.content,
-                    "vector": v,
-                }
-                for m, v in zip(msgs, vectors, strict=True)
-            ]
+        rows = [
+            {
+                "message_id": m.id,
+                "thread_id": m.thread_id,
+                "role": m.role,
+                "content": m.content,
+                "vector": v,
+            }
+            for m, v in zip(msgs, vectors, strict=True)
+        ]
+        # Upsert keyed by message id: indexing the same message twice (e.g. a backfill racing
+        # a live turn in another process) never creates duplicates.
+        (
+            self._table.merge_insert("message_id")
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute(rows)
         )
 
     def search(
@@ -135,16 +144,22 @@ class VectorIndex:
         q = self._table.search(vec).distance_type("cosine").limit(k)
         if exclude_ids:
             q = q.where(f"message_id NOT IN ({', '.join(str(int(i)) for i in exclude_ids)})")
-        hits = [
-            SearchHit(
-                message_id=int(r["message_id"]),
-                thread_id=r["thread_id"],
-                role=r["role"],
-                content=r["content"],
-                score=1.0 - float(r["_distance"]),
+        hits: list[SearchHit] = []
+        seen: set[int] = set()
+        for r in q.to_list():
+            mid = int(r["message_id"])
+            if mid in seen:  # defensive: tolerate duplicates written by older versions
+                continue
+            seen.add(mid)
+            hits.append(
+                SearchHit(
+                    message_id=mid,
+                    thread_id=r["thread_id"],
+                    role=r["role"],
+                    content=r["content"],
+                    score=1.0 - float(r["_distance"]),
+                )
             )
-            for r in q.to_list()
-        ]
         if min_score is not None:
             hits = [h for h in hits if h.score >= min_score]
         return hits

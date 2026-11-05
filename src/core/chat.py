@@ -7,14 +7,15 @@ stream from the provider router -> persist assistant message -> index both in th
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Literal
 
 from src.config import MissingAPIKeyError, Settings
 from src.core.context import assemble_prompt
-from src.core.db import Database
+from src.core.db import Database, ThreadNotFoundError
 from src.core.models import Message, SearchHit, Thread
 from src.core.vector import FastEmbedEmbedder, VectorIndex
 from src.providers.router import ProviderRouter
@@ -22,6 +23,12 @@ from src.providers.router import ProviderRouter
 log = logging.getLogger(__name__)
 
 TITLE_CHARS = 60
+
+
+class ThreadBusyError(RuntimeError):
+    """Raised when a second turn is started on a thread that is still streaming."""
+
+
 INTERRUPTED_NOTE = "\n\n_[response interrupted]_"
 
 
@@ -64,6 +71,7 @@ class ChatService:
         self.router = router
         self.index = index
         self.settings = settings
+        self._active: set[str] = set()
 
     # ---------- lifecycle ----------
 
@@ -205,10 +213,21 @@ class ChatService:
 
     # ---------- chat ----------
 
+    def is_busy(self, thread_id: str) -> bool:
+        return thread_id in self._active
+
+    @property
+    def active_threads(self) -> list[str]:
+        return sorted(self._active)
+
     async def send(
         self, thread_id: str, text: str, model: str | None = None
-    ) -> AsyncIterator[ChatEvent]:
-        """Run one chat turn, yielding events as they happen."""
+    ) -> AsyncGenerator[ChatEvent, None]:
+        """Run one chat turn, yielding events as they happen.
+
+        Only one turn per thread may run at a time in this process (`ThreadBusyError`);
+        all validation happens before anything is persisted.
+        """
         text = text.strip()
         if not text:
             raise ValueError("Message is empty")
@@ -216,7 +235,23 @@ class ChatService:
         model = model or thread.model
         provider, full_model = self.router.resolve(model)
         self.settings.require_key(provider)  # fail before persisting anything
+        if thread_id in self._active:
+            raise ThreadBusyError("This thread is already generating a response")
 
+        self._active.add(thread_id)
+        try:
+            async with contextlib.aclosing(
+                self._turn(thread, text, model, provider, full_model)
+            ) as events:
+                async for event in events:
+                    yield event
+        finally:
+            self._active.discard(thread_id)
+
+    async def _turn(
+        self, thread: Thread, text: str, model: str, provider: str, full_model: str
+    ) -> AsyncGenerator[ChatEvent, None]:
+        thread_id = thread.id
         is_first = not await self.db.get_messages(thread_id, limit=1)
         user_msg = await self.db.add_message(thread_id, "user", text)
         if is_first and thread.title in ("New chat", ""):
@@ -231,15 +266,23 @@ class ChatService:
 
         parts: list[str] = []
         try:
-            async for chunk in self.router.stream(prompt, model=model):
-                if chunk.delta:
-                    parts.append(chunk.delta)
-                    yield Delta(thread_id, chunk.delta)
+            # aclosing: on cancel/disconnect the provider HTTP stream is closed right away
+            # instead of generating (billed) tokens until garbage collection.
+            async with contextlib.aclosing(self.router.stream(prompt, model=model)) as stream:
+                async for chunk in stream:
+                    if chunk.delta:
+                        parts.append(chunk.delta)
+                        yield Delta(thread_id, chunk.delta)
         except BaseException:
             if parts:  # keep what the user already saw
-                await self.db.add_message(
-                    thread_id, "assistant", "".join(parts) + INTERRUPTED_NOTE, provider, full_model
-                )
+                with contextlib.suppress(ThreadNotFoundError):  # thread deleted mid-stream
+                    await self.db.add_message(
+                        thread_id,
+                        "assistant",
+                        "".join(parts) + INTERRUPTED_NOTE,
+                        provider,
+                        full_model,
+                    )
             raise
 
         assistant_msg = await self.db.add_message(

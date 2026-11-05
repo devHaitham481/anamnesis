@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from collections.abc import Iterator
@@ -34,6 +35,15 @@ def make_client(settings: Settings, llm: FakeLLM, **kw: Any) -> TestClient:
 def client(settings: Settings, fake_llm: FakeLLM) -> Iterator[TestClient]:
     with make_client(settings, fake_llm) as c:
         yield c
+
+
+@contextlib.contextmanager
+def ws_open(client: TestClient, url: str = "/ws", **kw: Any) -> Iterator[Any]:
+    """Connect and consume the initial `active` event every client receives."""
+    with client.websocket_connect(url, **kw) as ws:
+        first = ws.receive_json()
+        assert first["type"] == "active" and isinstance(first["thread_ids"], list)
+        yield ws
 
 
 def recv_until(ws: Any, pred: Any, limit: int = 200) -> list[dict[str, Any]]:
@@ -123,7 +133,7 @@ def test_sse_chat_and_search(client: TestClient, fake_llm: FakeLLM) -> None:
 
 def test_websocket_chat_broadcasts_to_all_clients(client: TestClient, fake_llm: FakeLLM) -> None:
     tid = client.post("/api/threads", json={}).json()["id"]
-    with client.websocket_connect("/ws") as a, client.websocket_connect("/ws") as b:
+    with ws_open(client) as a, ws_open(client) as b:
         a.send_json({"type": "ping"})
         assert a.receive_json() == {"type": "pong"}
         a.send_json({"type": "send", "thread_id": tid, "content": "hello", "model": "gemini"})
@@ -139,7 +149,7 @@ def test_websocket_chat_broadcasts_to_all_clients(client: TestClient, fake_llm: 
 
 def test_websocket_errors(client: TestClient, fake_llm: FakeLLM) -> None:
     tid = client.post("/api/threads", json={}).json()["id"]
-    with client.websocket_connect("/ws") as ws:
+    with ws_open(client) as ws:
         ws.send_text("not json")
         assert ws.receive_json()["type"] == "error"
         ws.send_json({"type": "bogus"})
@@ -170,7 +180,7 @@ def test_writes_from_other_process_are_pushed(client: TestClient, settings: Sett
             await other.add_message(tid, "user", "typed in the terminal")
             await other.create_thread("Made in TUI")
 
-    with client.websocket_connect("/ws") as ws:
+    with ws_open(client) as ws:
         time.sleep(0.1)
         asyncio.run(tui_writes())
         seen = {"message": False, "threads": False}
@@ -189,7 +199,7 @@ def test_rejects_foreign_origin_and_host(client: TestClient) -> None:
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect("/ws", headers={"origin": "https://evil.example"}) as ws:
             ws.receive_json()
-    with client.websocket_connect("/ws", headers={"origin": "http://testserver"}) as ws:
+    with ws_open(client, headers={"origin": "http://testserver"}) as ws:
         ws.send_json({"type": "ping"})
         assert ws.receive_json() == {"type": "pong"}
     assert client.get("/api/threads", headers={"host": "evil.example"}).status_code == 400
@@ -206,7 +216,7 @@ def test_auth_token(settings: Settings, fake_llm: FakeLLM) -> None:
         with pytest.raises(WebSocketDisconnect):
             with c.websocket_connect("/ws") as ws:
                 ws.receive_json()
-        with c.websocket_connect("/ws?token=s3cret") as ws:
+        with ws_open(c, "/ws?token=s3cret") as ws:
             ws.send_json({"type": "ping"})
             assert ws.receive_json() == {"type": "pong"}
 

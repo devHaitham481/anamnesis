@@ -33,3 +33,16 @@
 - **Frontend** (`src/web/static`, no build step): threads sidebar, live streaming, model select with missing-key banner, search, rename (double-click title), delete, deep links, reconnect with catch-up, light/dark, mobile drawer. Markdown renderer escapes all HTML first.
 - **Bugs caught by e2e (Playwright) test:** (1) null deref dropped the user bubble when a stream had started; (2) sending right after "+ New" went to the previous thread. Both fixed with regression coverage.
 - **Validated for real:** `python -m src.web` with real fastembed embeddings + curl smoke test; `python -m src.cli` launched in a pty against the same data dir.
+
+## 2026-11-05 — Independent review fixes
+
+An independent review agent audited the codebase; all findings fixed with regression tests (`tests/test_review_regressions.py`):
+
+1. **SQLite lock leak (confirmed):** a failed/cancelled write left sqlite3's implicit transaction open, holding the WAL write lock and blocking the other process. All writes now go through `Database._write()` (commit or always-rollback).
+2. **LanceDB cross-process staleness + duplicates (confirmed):** connect with `read_consistency_interval=0`; `add` is an upsert (`merge_insert` on `message_id`); search dedupes.
+3. **TUI crash on Ctrl+Q mid-stream (confirmed):** UI refresh no longer runs in the cancelled worker's `finally`. Mutation-tested: the regression test fails without the fix.
+4. **Interleaved concurrent turns on one thread:** `ChatService` allows one turn per thread (`ThreadBusyError`, atomic check-and-claim). Web: SSE → 409; WS → error to the sender only; a rejected turn broadcasts nothing.
+5. **WS reconnect unlocked Send mid-stream:** server sends `{"type":"active","thread_ids":[...]}` on connect; client keeps threads busy across disconnects and reconciles on reconnect.
+- Lower priority: provider HTTP stream is closed promptly on cancel (`aclosing` + `aclose`), broadcasts are concurrent with a per-socket timeout, stale `loadThreads` responses are ignored, partial-save tolerates a thread deleted mid-stream.
+- **Known limitation:** the per-thread lock is per process; simultaneous sends to the *same* thread from TUI and web at the same instant are not serialized across processes.
+- Tests: 78 passed, 4 skipped (live provider tests — no API keys in this environment).

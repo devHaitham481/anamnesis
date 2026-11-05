@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -111,6 +114,21 @@ class Database:
             raise RuntimeError("Database is not open")
         return self._conn
 
+    @contextlib.asynccontextmanager
+    async def _write(self) -> AsyncIterator[aiosqlite.Connection]:
+        """One write transaction: commit on success, ALWAYS roll back on failure/cancellation.
+
+        Without the rollback a failed statement leaves sqlite3's implicit transaction open,
+        holding the WAL write lock and blocking every other process (TUI <-> web server).
+        """
+        conn = self.conn
+        try:
+            yield conn
+            await conn.commit()
+        except BaseException:
+            await asyncio.shield(conn.rollback())
+            raise
+
     async def _fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[aiosqlite.Row]:
         async with self.conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
@@ -118,13 +136,13 @@ class Database:
     # ---------- providers ----------
 
     async def upsert_provider(self, name: str, default_model: str) -> None:
-        await self.conn.execute(
-            "INSERT INTO providers(name, default_model, updated_at) VALUES (?, ?, ?) "
-            "ON CONFLICT(name) DO UPDATE SET default_model=excluded.default_model, "
-            "updated_at=excluded.updated_at",
-            (name, default_model, time.time()),
-        )
-        await self.conn.commit()
+        async with self._write() as conn:
+            await conn.execute(
+                "INSERT INTO providers(name, default_model, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET default_model=excluded.default_model, "
+                "updated_at=excluded.updated_at",
+                (name, default_model, time.time()),
+            )
 
     async def list_providers(self) -> dict[str, str]:
         rows = await self._fetchall("SELECT name, default_model FROM providers ORDER BY name")
@@ -144,11 +162,11 @@ class Database:
             created_at=now,
             updated_at=now,
         )
-        await self.conn.execute(
-            f"INSERT INTO threads({_THREAD_COLS}) VALUES (?, ?, ?, ?, ?, ?)",
-            (thread.id, thread.title, thread.model, thread.system_prompt, now, now),
-        )
-        await self.conn.commit()
+        async with self._write() as conn:
+            await conn.execute(
+                f"INSERT INTO threads({_THREAD_COLS}) VALUES (?, ?, ?, ?, ?, ?)",
+                (thread.id, thread.title, thread.model, thread.system_prompt, now, now),
+            )
         return thread
 
     async def get_thread(self, thread_id: str) -> Thread:
@@ -169,16 +187,16 @@ class Database:
         self, thread_id: str, *, title: str | None = None, model: str | None = None
     ) -> Thread:
         thread = await self.get_thread(thread_id)
-        await self.conn.execute(
-            "UPDATE threads SET title = ?, model = ?, updated_at = ? WHERE id = ?",
-            (title or thread.title, model or thread.model, time.time(), thread_id),
-        )
-        await self.conn.commit()
+        async with self._write() as conn:
+            await conn.execute(
+                "UPDATE threads SET title = ?, model = ?, updated_at = ? WHERE id = ?",
+                (title or thread.title, model or thread.model, time.time(), thread_id),
+            )
         return await self.get_thread(thread_id)
 
     async def delete_thread(self, thread_id: str) -> None:
-        cur = await self.conn.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
-        await self.conn.commit()
+        async with self._write() as conn:
+            cur = await conn.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
         if cur.rowcount == 0:
             raise ThreadNotFoundError(thread_id)
 
@@ -203,15 +221,17 @@ class Database:
     ) -> Message:
         now = time.time()
         try:
-            cur = await self.conn.execute(
-                "INSERT INTO messages(thread_id, role, content, provider, model, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (thread_id, role, content, provider, model, now),
-            )
+            async with self._write() as conn:
+                cur = await conn.execute(
+                    "INSERT INTO messages(thread_id, role, content, provider, model, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (thread_id, role, content, provider, model, now),
+                )
+                await conn.execute(
+                    "UPDATE threads SET updated_at = ? WHERE id = ?", (now, thread_id)
+                )
         except aiosqlite.IntegrityError as e:
             raise ThreadNotFoundError(thread_id) from e
-        await self.conn.execute("UPDATE threads SET updated_at = ? WHERE id = ?", (now, thread_id))
-        await self.conn.commit()
         assert cur.lastrowid is not None
         return Message(
             id=cur.lastrowid,

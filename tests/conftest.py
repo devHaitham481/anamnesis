@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -58,3 +59,62 @@ async def service(settings: Settings, fake_llm: FakeLLM) -> AsyncIterator[ChatSe
     svc = ChatService(db, ProviderRouter(settings, completion_fn=fake_llm), index, settings)
     yield svc
     await svc.close()
+
+
+class _Delta:
+    def __init__(self, content: str | None) -> None:
+        self.content = content
+
+
+class _Choice:
+    def __init__(self, content: str | None, finish: str | None) -> None:
+        self.delta = _Delta(content)
+        self.finish_reason = finish
+
+
+class _Chunk:
+    def __init__(self, content: str | None, finish: str | None = None) -> None:
+        self.choices = [_Choice(content, finish)]
+
+
+class SlowStream:
+    """Async-iterable provider stream that waits on a gate between chunks; tracks aclose()."""
+
+    def __init__(self, words: list[str], gate: asyncio.Event | None, delay: float) -> None:
+        self.words = words
+        self.gate = gate
+        self.delay = delay
+        self.closed = False
+
+    def __aiter__(self) -> SlowStream:
+        self._i = 0
+        return self
+
+    async def __anext__(self) -> _Chunk:
+        if self._i >= len(self.words):
+            raise StopAsyncIteration
+        if self._i > 0:
+            if self.gate is not None:
+                await self.gate.wait()
+            await asyncio.sleep(self.delay)
+        self._i += 1
+        last = self._i == len(self.words)
+        return _Chunk(self.words[self._i - 1], "stop" if last else None)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class SlowLLM:
+    """Fake provider that streams word by word; set `gate` to hold the stream after word 1."""
+
+    def __init__(self, words: int = 20, delay: float = 0.0) -> None:
+        self.words = [f"w{i} " for i in range(words)]
+        self.delay = delay
+        self.gate: asyncio.Event | None = None
+        self.streams: list[SlowStream] = []
+
+    async def __call__(self, **kwargs: Any) -> SlowStream:
+        stream = SlowStream(self.words, self.gate, self.delay)
+        self.streams.append(stream)
+        return stream

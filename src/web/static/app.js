@@ -200,7 +200,11 @@
   // ---------- actions ----------
 
   async function loadThreads() {
-    state.threads = await api("/api/threads");
+    const requestedFor = state.threadId;
+    const threads = await api("/api/threads");
+    // A newer thread may have been created/opened while this request was in flight.
+    if (state.threadId !== requestedFor) return;
+    state.threads = threads;
     if (state.threadId && !state.threads.some((t) => t.id === state.threadId)) {
       state.threadId = null;
       clearMessages();
@@ -351,8 +355,9 @@
     };
     ws.onmessage = (ev) => handleEvent(JSON.parse(ev.data));
     ws.onclose = () => {
+      // Keep streaming threads marked busy: the server-side turn keeps running. The
+      // "active" event sent on reconnect tells us which ones actually finished.
       setConn(false, "Reconnecting…");
-      for (const id of Array.from(state.streaming.keys())) streamFinish(id);
       const delay = Math.min(1000 * 2 ** state.retry++, 15000);
       setTimeout(connect, delay);
     };
@@ -386,6 +391,16 @@
         if (e.error && e.thread_id === state.threadId) addNote(e.error, "error");
         refreshThreadsSoon();
         break;
+      case "active": {
+        const active = new Set(e.thread_ids);
+        for (const id of Array.from(state.streaming.keys())) {
+          if (!active.has(id)) streamFinish(id);
+        }
+        for (const id of active) {
+          if (!state.streaming.has(id)) streamStart(id, "");
+        }
+        break;
+      }
       case "threads_changed":
         refreshThreadsSoon();
         break;

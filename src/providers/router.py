@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+import contextlib
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from typing import Any
 
 import litellm
@@ -80,19 +81,25 @@ class ProviderRouter:
 
     async def stream(
         self, messages: Sequence[ChatMessage], model: str = "claude", **params: Any
-    ) -> AsyncIterator[StreamChunk]:
+    ) -> AsyncGenerator[StreamChunk, None]:
         provider, full, kwargs = self._request_kwargs(model, messages, stream=True, **params)
         response = await self._completion(**kwargs)
-        async for chunk in response:
-            if not chunk.choices:
-                continue
-            choice = chunk.choices[0]
-            delta = getattr(choice.delta, "content", None) or ""
-            if not delta and not choice.finish_reason:
-                continue
-            yield StreamChunk(
-                provider=provider, model=full, delta=delta, finish_reason=choice.finish_reason
-            )
+        try:
+            async for chunk in response:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = getattr(choice.delta, "content", None) or ""
+                if not delta and not choice.finish_reason:
+                    continue
+                yield StreamChunk(
+                    provider=provider, model=full, delta=delta, finish_reason=choice.finish_reason
+                )
+        finally:
+            aclose = getattr(response, "aclose", None)
+            if aclose is not None:
+                with contextlib.suppress(Exception):
+                    await aclose()
 
 
 # PRD naming.

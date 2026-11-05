@@ -24,7 +24,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.websockets import WebSocketDisconnect
 
 from src.config import MissingAPIKeyError, Settings, load_settings
-from src.core.chat import AssistantSaved, ChatEvent, ChatService, Delta, UserSaved
+from src.core.chat import (
+    AssistantSaved,
+    ChatEvent,
+    ChatService,
+    ThreadBusyError,
+    UserSaved,
+)
 from src.core.db import ThreadNotFoundError
 from src.core.models import Message, SearchHit, Thread
 from src.providers.router import UnknownModelError
@@ -80,16 +86,24 @@ class Hub:
     def __init__(self) -> None:
         self.clients: set[WebSocket] = set()
 
+    SEND_TIMEOUT = 5.0
+
     async def broadcast(self, event: dict[str, Any]) -> None:
+        """Send to all clients concurrently; a slow or dead browser can't stall the others."""
         text = json.dumps(event)
-        dead: list[WebSocket] = []
-        for ws in list(self.clients):
+        clients = list(self.clients)
+
+        async def send(ws: WebSocket) -> bool:
             try:
-                await ws.send_text(text)
+                await asyncio.wait_for(ws.send_text(text), self.SEND_TIMEOUT)
+                return True
             except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.clients.discard(ws)
+                return False
+
+        results = await asyncio.gather(*(send(ws) for ws in clients))
+        for ws, ok in zip(clients, results, strict=True):
+            if not ok:
+                self.clients.discard(ws)
 
 
 def message_event(msg: Message) -> dict[str, Any]:
@@ -264,6 +278,8 @@ def create_app(
         missing = service.missing_key(model)
         if missing:
             raise HTTPException(400, f"{missing} is not set (add it to .env and restart)")
+        if service.is_busy(thread_id):
+            raise HTTPException(409, "This thread is already generating a response")
         return model
 
     @app.post("/api/threads/{thread_id}/chat")
@@ -291,6 +307,8 @@ def create_app(
         service: ChatService = ws.app.state.service
         tasks: set[asyncio.Task[None]] = ws.app.state.chat_tasks
         hub.clients.add(ws)
+        # Tell a (re)connecting client which threads are mid-response so it keeps them busy.
+        await ws.send_json({"type": "active", "thread_ids": service.active_threads})
         try:
             while True:
                 try:
@@ -321,8 +339,10 @@ def create_app(
             if not isinstance(thread_id, str):
                 raise HTTPException(400, "thread_id is required")
             model = await preflight(service, thread_id, req.model)
-            async for _ in run_turn(service, hub, thread_id, req.content, model):
-                pass  # run_turn broadcasts everything, including to this socket
+            async for payload in run_turn(service, hub, thread_id, req.content, model):
+                if payload["type"] == "error":  # rejection: only this socket is told
+                    await ws.send_json(payload)
+                # everything else was already broadcast to all sockets, including this one
         except Exception as e:
             detail = e.detail if isinstance(e, HTTPException) else f"{type(e).__name__}: {e}"
             with contextlib.suppress(Exception):
@@ -336,26 +356,42 @@ def create_app(
 async def run_turn(
     service: ChatService, hub: Hub, thread_id: str, content: str, model: str
 ) -> AsyncIterator[dict[str, Any]]:
-    """Run a chat turn, broadcast every event to all browsers, and yield the same payloads."""
+    """Run a chat turn, broadcast every event to all browsers, and yield the same payloads.
+
+    If the turn is rejected before it starts (busy thread, validation), a single
+    `{"type": "error"}` payload is yielded to the caller only — other browsers see nothing,
+    so a rejected request can never disturb a turn that is already streaming.
+    """
+    events = service.send(thread_id, content, model)
+    try:
+        first = await anext(events)
+    except Exception as e:
+        await events.aclose()
+        if not isinstance(e, MissingAPIKeyError | UnknownModelError | ThreadBusyError | ValueError):
+            log.exception("chat turn failed to start")
+        detail = str(e) if not isinstance(e, ThreadNotFoundError) else "Thread not found"
+        yield {"type": "error", "thread_id": thread_id, "detail": detail}
+        return
+
     start = {"type": "stream_start", "thread_id": thread_id, "model": model}
     await hub.broadcast(start)
     yield start
     error: str | None = None
     try:
-        ev: ChatEvent
-        async for ev in service.send(thread_id, content, model):
+        ev: ChatEvent | None = first
+        while ev is not None:
             if isinstance(ev, UserSaved | AssistantSaved):
                 payload = message_event(ev.message)
-            elif isinstance(ev, Delta):
+            else:
                 payload = {"type": "delta", "thread_id": thread_id, "text": ev.text}
             await hub.broadcast(payload)
             yield payload
-    except (MissingAPIKeyError, UnknownModelError, ValueError) as e:
-        error = str(e)
+            ev = await anext(events, None)
     except Exception as e:
         log.exception("chat turn failed")
         error = f"{type(e).__name__}: {e}"
     finally:
+        await events.aclose()
         end: dict[str, Any] = {"type": "stream_end", "thread_id": thread_id, "error": error}
         await hub.broadcast(end)
     yield end

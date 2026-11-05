@@ -319,6 +319,9 @@ class NexusApp(App[None]):
                 self.notify(f"Request failed: {e}", severity="error")
         finally:
             self._streaming = None
+        # Not in `finally`: on cancellation (e.g. Ctrl+Q mid-stream) the DOM is being torn
+        # down, so touching widgets would crash the shutdown. The partial reply is already saved.
+        if self.is_running:
             await self._refresh_threads()
             await self._sync_messages()
 
