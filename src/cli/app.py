@@ -5,6 +5,7 @@ All data access goes through `ChatService`; this module only handles presentatio
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -20,7 +21,7 @@ from src.cli.widgets import MessageView, ThreadItem
 from src.config import Settings, load_settings
 from src.core.chat import AssistantSaved, ChatService, Delta, UserSaved
 from src.core.db import ThreadNotFoundError
-from src.core.models import Message, Thread
+from src.core.models import SOURCE_LABELS, Message, Thread
 from src.providers.router import ProviderError
 
 log = logging.getLogger(__name__)
@@ -55,6 +56,8 @@ class NexusApp(App[None]):
         self._displayed: set[int] = set()
         self._cursor = 0
         self._threads_sig: tuple[int, float, int] | None = None
+        # Serializes sidebar rebuilds: the poller and a finished reply can both trigger one.
+        self._threads_lock = asyncio.Lock()
         self._streaming: str | None = None
         self._polling = False
         self._listing: list[str] = []
@@ -119,6 +122,33 @@ class NexusApp(App[None]):
         prompt.placeholder = "Message NexusAI…  (/help for commands)"
         prompt.focus()
         self.set_interval(self.settings.sync_interval, self._poll)
+        if self.settings.memory_sync:
+            self._memory_sync_loop()
+
+    @work(exclusive=True, group="memory-sync")
+    async def _memory_sync_loop(self) -> None:
+        """Keep importing other tools' history while the TUI is open (new threads appear live)."""
+        from src.ingest.runner import watch
+
+        await watch(self.svc, interval=self.settings.memory_sync_interval)
+
+    @work(exclusive=True, group="memory-sync-now")
+    async def _memory_sync_now(self) -> None:
+        from src.ingest.runner import sync_once
+
+        try:
+            report = await sync_once(self.svc)
+        except Exception as e:
+            log.exception("manual sync failed")
+            await self._note(f"Sync failed: {e}", "error")
+            return
+        if report.messages_added:
+            per = ", ".join(f"{SOURCE_LABELS.get(k, k)}: {v}" for k, v in report.by_source.items())
+            await self._note(f"Imported {report.messages_added} new messages ({per}).")
+        else:
+            await self._note("Memory is up to date (or another NexusAI process is syncing).")
+        if self.is_running:
+            await self._refresh_threads()
 
     async def on_unmount(self) -> None:
         if self._owns_service and self.service is not None:
@@ -160,6 +190,10 @@ class NexusApp(App[None]):
     # ---------- threads ----------
 
     async def _refresh_threads(self) -> list[Thread]:
+        async with self._threads_lock:
+            return await self._rebuild_threads()
+
+    async def _rebuild_threads(self) -> list[Thread]:
         svc = self.svc
         self._threads_sig = await svc.threads_signature()
         threads = await svc.list_threads()
@@ -353,17 +387,23 @@ class NexusApp(App[None]):
             await self._switch_model(cmd.arg)
             await self._note(f"Switched to **{cmd.arg}**.")
         elif cmd.name == "history":
-            threads = await svc.list_threads()
-            self._listing = [t.id for t in threads[:30]]
+            source = cmd.arg.strip().lower() or None
+            threads = await svc.list_threads(limit=30, source=source)
+            self._listing = [t.id for t in threads]
             if not threads:
-                await self._note("No threads yet.")
+                await self._note("No conversations" + (f" from `{source}`." if source else " yet."))
                 return
             lines = [
-                f"{i}. **{t.title}** — {t.model} · "
+                f"{i}. **{t.title}** — {SOURCE_LABELS.get(t.source, t.source)} · "
                 f"{datetime.fromtimestamp(t.updated_at):%Y-%m-%d %H:%M}"
-                for i, t in enumerate(threads[:30], 1)
+                for i, t in enumerate(threads, 1)
             ]
-            await self._note("**Recent threads** (open with `/open N`)\n\n" + "\n".join(lines))
+            await self._note(
+                "**Recent conversations** (open with `/open N`)\n\n" + "\n".join(lines)
+            )
+        elif cmd.name == "sync":
+            await self._note("Importing new history from your AI tools…")
+            self._memory_sync_now()
         elif cmd.name == "search":
             hits = await svc.search(cmd.arg, k=10)
             self._listing = [h.thread_id for h in hits]
@@ -374,7 +414,8 @@ class NexusApp(App[None]):
             for i, h in enumerate(hits, 1):
                 snippet = " ".join(h.content.split())
                 snippet = snippet if len(snippet) <= 160 else snippet[:159] + "…"
-                lines.append(f"{i}. **{h.thread_title}** ({h.role}): {snippet}")
+                where = SOURCE_LABELS.get(h.source or "", h.source or "")
+                lines.append(f"{i}. **{h.thread_title}** · {where} ({h.role}): {snippet}")
             await self._note(f"**Search: {cmd.arg}** (open with `/open N`)\n\n" + "\n".join(lines))
         elif cmd.name == "open":
             n = int(cmd.arg)

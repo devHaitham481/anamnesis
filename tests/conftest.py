@@ -44,6 +44,7 @@ def settings(tmp_path: Path) -> Settings:
         data_dir=tmp_path / "data",
         rag_min_score=0.3,
         sync_interval=0.05,
+        memory_sync=False,
     )
 
 

@@ -20,6 +20,7 @@ from src.core.models import Message, SearchHit
 log = logging.getLogger(__name__)
 
 TABLE = "messages"
+EMBED_CHARS = 1000
 
 
 class Embedder(Protocol):
@@ -58,7 +59,7 @@ class FastEmbedEmbedder:
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         with self._lock:
-            return [v.tolist() for v in self._model.embed(list(texts))]
+            return [v.tolist() for v in self._model.embed(list(texts), batch_size=32)]
 
 
 def _sql_str(value: str) -> str:
@@ -110,7 +111,9 @@ class VectorIndex:
         msgs = [m for m in messages if m.content.strip() and m.role != "system"]
         if not msgs:
             return
-        vectors = self.embedder.embed([m.content for m in msgs])
+        # The opening of a message carries its topic; embedding cost grows steeply with length
+        # (512 tokens is ~10x slower than 150 on CPU), so only the head is embedded.
+        vectors = self.embedder.embed([m.content[:EMBED_CHARS] for m in msgs])
         rows = [
             {
                 "message_id": m.id,

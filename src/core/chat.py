@@ -9,20 +9,30 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncGenerator
+import time
+import uuid
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 from typing import Literal
 
 from src.config import MissingAPIKeyError, Settings
 from src.core.context import assemble_prompt
 from src.core.db import Database, ThreadNotFoundError
-from src.core.models import Message, SearchHit, Thread
+from src.core.models import (
+    ImportedConversation,
+    ImportedMessage,
+    Message,
+    SearchHit,
+    Thread,
+)
 from src.core.vector import FastEmbedEmbedder, VectorIndex
 from src.providers.router import ProviderRouter
 
 log = logging.getLogger(__name__)
 
 TITLE_CHARS = 60
+# Shorter messages ("yes", "do it") carry no recallable meaning; they stay keyword-searchable.
+MIN_INDEX_CHARS = 20
 
 
 class ThreadBusyError(RuntimeError):
@@ -76,8 +86,14 @@ class ChatService:
     # ---------- lifecycle ----------
 
     @classmethod
-    async def create(cls, settings: Settings, router: ProviderRouter | None = None) -> ChatService:
-        """Open the database and (best-effort) the vector index from settings."""
+    async def create(
+        cls, settings: Settings, router: ProviderRouter | None = None, backfill: bool = False
+    ) -> ChatService:
+        """Open the database and (best-effort) the vector index from settings.
+
+        Missing embeddings are filled in by the background memory sync (`ingest.runner.watch`)
+        rather than here, so startup never waits on a large backlog.
+        """
         db = await Database(settings.db_path).open()
         router = router or ProviderRouter(settings)
         for alias, model in router.aliases.items():
@@ -92,7 +108,8 @@ class ChatService:
             except Exception as e:  # offline first run, corrupted cache, ...
                 log.warning("Semantic memory disabled (embedder unavailable): %s", e)
         service = cls(db, router, index, settings)
-        await service.backfill_index()
+        if backfill:
+            await service.backfill_index()
         return service
 
     async def close(self) -> None:
@@ -107,16 +124,31 @@ class ChatService:
         d = self.settings.default_model
         return d if d in self.router.aliases else self.models[0]
 
-    async def backfill_index(self) -> int:
-        """Index any messages written while the vector store was unavailable."""
+    async def backfill_index(
+        self, batch: int = 64, progress: Callable[[int, int], None] | None = None
+    ) -> int:
+        """Embed every message not yet in the vector index (e.g. after a bulk import).
+
+        Runs in small batches so a large first import never blocks other work for long and
+        progress can be reported. Returns how many messages were indexed.
+        """
         if self.index is None:
             return 0
         index = self.index
         indexed = await asyncio.to_thread(index.indexed_ids)
-        missing = [m for m in await self.db.all_messages() if m.id not in indexed]
-        if missing:
-            await asyncio.to_thread(index.add, missing)
-        return len(missing)
+        missing = [m for m in await self.db.all_messages() if m.id not in indexed and _indexable(m)]
+        done = 0
+        for start in range(0, len(missing), batch):
+            chunk = missing[start : start + batch]
+            try:
+                await asyncio.to_thread(index.add, chunk)
+            except Exception as e:
+                log.warning("Vector indexing failed: %s", e)
+                break
+            done += len(chunk)
+            if progress is not None:
+                progress(done, len(missing))
+        return done
 
     # ---------- threads ----------
 
@@ -125,8 +157,13 @@ class ChatService:
         self.router.resolve(model)  # validate early
         return await self.db.create_thread(title=title, model=model)
 
-    async def list_threads(self) -> list[Thread]:
-        return await self.db.list_threads()
+    async def list_threads(
+        self, limit: int = 200, source: str | None = None, project: str | None = None
+    ) -> list[Thread]:
+        return await self.db.list_threads(limit=limit, source=source, project=project)
+
+    async def source_counts(self) -> dict[str, int]:
+        return await self.db.source_counts()
 
     async def get_thread(self, thread_id: str) -> Thread:
         return await self.db.get_thread(thread_id)
@@ -171,29 +208,107 @@ class ChatService:
 
     # ---------- search ----------
 
-    async def search(self, query: str, k: int = 8) -> list[SearchHit]:
-        """Semantic search when available, merged with keyword (FTS5) hits."""
+    async def search(
+        self,
+        query: str,
+        k: int = 8,
+        source: str | None = None,
+        project: str | None = None,
+        exclude_thread: str | None = None,
+    ) -> list[SearchHit]:
+        """Semantic search when available, merged with keyword (FTS5) hits.
+
+        Results can be limited to one source (e.g. "claude-code") and/or project directory.
+        """
+        filtered = bool(source or project or exclude_thread)
         hits: dict[int, SearchHit] = {}
         if self.index is not None:
             try:
+                # Oversample when filtering: the vector store doesn't know thread metadata.
                 semantic = await asyncio.to_thread(
-                    self.index.search, query, k, (), self.settings.rag_min_score
+                    self.index.search,
+                    query,
+                    k * 5 if filtered else k,
+                    (),
+                    self.settings.rag_min_score,
                 )
                 hits.update({h.message_id: h for h in semantic})
             except Exception as e:
                 log.warning("Semantic search failed: %s", e)
-        for h in await self.db.search_messages(query, limit=k):
+        for h in await self.db.search_messages(query, limit=k * 3, source=source, project=project):
             hits.setdefault(h.message_id, h.model_copy(update={"score": 0.0}))
-        result = list(hits.values())[:k]
-        return await self._attach_titles(result)
+        result = await self._attach_titles(list(hits.values()))
+        result = [
+            h
+            for h in result
+            if (not source or h.source == source)
+            and (not project or h.project == project)
+            and h.thread_id != exclude_thread
+        ]
+        return result[:k]
 
     async def _attach_titles(self, hits: list[SearchHit]) -> list[SearchHit]:
-        titles = {t.id: t.title for t in await self.db.list_threads(limit=10_000)}
-        return [
-            h.model_copy(update={"thread_title": titles.get(h.thread_id)})
-            for h in hits
-            if h.thread_id in titles  # drop hits from deleted threads
-        ]
+        meta = await self.db.thread_meta(sorted({h.thread_id for h in hits}))
+        out: list[SearchHit] = []
+        for h in hits:
+            t = meta.get(h.thread_id)
+            if t is None:  # drop hits from deleted threads
+                continue
+            update: dict[str, object] = {
+                "thread_title": t.title,
+                "source": t.source,
+                "project": t.project,
+            }
+            out.append(h.model_copy(update=update))
+        missing = [h.message_id for h in out if h.created_at is None]
+        if missing:
+            created = {m.id: m.created_at for m in await self.db.get_messages_by_ids(missing)}
+            out = [
+                h
+                if h.created_at is not None
+                else h.model_copy(update={"created_at": created.get(h.message_id)})
+                for h in out
+            ]
+        return out
+
+    # ---------- shared memory: imports from other tools, notes ----------
+
+    async def import_conversation(
+        self, conv: ImportedConversation, index: bool = True
+    ) -> tuple[Thread, int]:
+        """Store a conversation from another tool and (optionally) embed its new messages.
+
+        Bulk imports pass `index=False` and call `backfill_index()` once afterwards, so text is
+        searchable by keyword immediately and semantic recall fills in as embedding proceeds.
+        """
+        thread, added = await self.db.import_conversation(conv, model=self.default_model)
+        if index:
+            await self._index(added)
+        return thread, len(added)
+
+    async def remember(
+        self, content: str, topic: str | None = None, source: str = "note"
+    ) -> Thread:
+        """Save a durable note (e.g. written by an agent through MCP) into shared memory."""
+        content = content.strip()
+        if not content:
+            raise ValueError("Nothing to remember")
+        topic = (topic or "General").strip()[:80] or "General"
+        conv = ImportedConversation(
+            source=source,
+            external_id=topic.lower(),
+            title=f"Notes: {topic}",
+            messages=[
+                ImportedMessage(
+                    external_id=uuid.uuid4().hex,
+                    role="user",
+                    content=content,
+                    created_at=time.time(),
+                )
+            ],
+        )
+        thread, _ = await self.import_conversation(conv)
+        return thread
 
     async def _retrieve(self, query: str, exclude_ids: list[int]) -> list[SearchHit]:
         if self.index is None or self.settings.rag_top_k <= 0:
@@ -292,9 +407,14 @@ class ChatService:
         await self._index([user_msg, assistant_msg])
 
     async def _index(self, messages: list[Message]) -> None:
-        if self.index is None:
+        messages = [m for m in messages if _indexable(m)]
+        if self.index is None or not messages:
             return
         try:
             await asyncio.to_thread(self.index.add, messages)
         except Exception as e:  # backfill_index() will pick these up next start
             log.warning("Vector indexing failed: %s", e)
+
+
+def _indexable(message: Message) -> bool:
+    return len(message.content.strip()) >= MIN_INDEX_CHARS

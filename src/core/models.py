@@ -9,6 +9,20 @@ from pydantic import BaseModel
 Role = Literal["system", "user", "assistant"]
 
 
+# Where a conversation came from. "nexus" = chatted inside NexusAI; everything else is imported.
+SOURCE_LABELS: dict[str, str] = {
+    "nexus": "NexusAI",
+    "note": "Memory note",
+    "claude-code": "Claude Code",
+    "codex": "Codex CLI",
+    "gemini-cli": "Gemini CLI",
+    "cursor": "Cursor",
+    "chatgpt": "ChatGPT",
+    "claude-web": "Claude (web/desktop)",
+    "gemini-web": "Gemini (web)",
+}
+
+
 class Thread(BaseModel):
     id: str
     title: str
@@ -16,6 +30,9 @@ class Thread(BaseModel):
     system_prompt: str | None = None
     created_at: float
     updated_at: float
+    source: str = "nexus"
+    project: str | None = None
+    external_id: str | None = None
 
 
 class Message(BaseModel):
@@ -35,3 +52,26 @@ class SearchHit(BaseModel):
     content: str
     score: float
     thread_title: str | None = None
+    source: str | None = None
+    project: str | None = None
+    created_at: float | None = None
+
+
+class ImportedMessage(BaseModel):
+    """One message parsed from another tool's history. `external_id` must be stable."""
+
+    external_id: str
+    role: Role
+    content: str
+    created_at: float
+    model: str | None = None
+
+
+class ImportedConversation(BaseModel):
+    """One conversation/session parsed from another tool (Claude Code, ChatGPT export, ...)."""
+
+    source: str
+    external_id: str
+    title: str | None = None
+    project: str | None = None
+    messages: list[ImportedMessage]

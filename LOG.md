@@ -56,3 +56,24 @@ An independent review agent audited the codebase; all findings fixed with regres
   - LiteLLM exceptions (before or mid-stream) become a one-line `ProviderError`, e.g. "Gemini is temporarily unavailable: …", "Claude request failed: Your credit balance is too low…". TUI and web show it without a class name or JSON dump and log it as a warning, without a traceback.
   - `pytest` now excludes live tests by default (they cost money and depend on provider uptime); run them with `pytest -m integration`.
 - Tests: 90 passed (+12 router error tests). Ruff and mypy clean.
+
+## 2026-11-06 — Sprint 5: shared memory across all AI tools
+
+**Direction change (user):** NexusAI is meant to be one memory underneath every AI tool the user already uses, not a gateway where you pick a model. The chat gateway is kept as a side feature.
+
+- **Storage:** threads carry `source`, `project` and `external_id`; messages carry `external_id`. Old databases migrate in place. `import_conversation` is idempotent through unique indexes, so re-scanning a grown transcript adds only the tail.
+- **Importers** (`src/ingest`):
+  - Claude Code: verified against the real `~/.claude/projects` (44 sessions, ~6k messages).
+  - Codex, Gemini CLI, Cursor: built from their current source/format docs. These tools are not installed here, so they are covered by fixture tests only.
+  - Web exports: ChatGPT (the visible branch only), claude.ai, Gemini Takeout (grouped into sessions).
+  - Plumbing (tool calls and results, thinking, injected context, task notifications, sidechains) is filtered out.
+- **MCP server** (`nexus mcp` / `python -m src.memory_mcp`, MCP SDK 2.3): tested end to end over real stdio from a foreign working directory. `.env` falls back to the project's copy when launched elsewhere.
+- **`nexus connect`:** merges into Claude Desktop/Cursor/Gemini JSON configs and Codex TOML, with `.bak` backups and a refusal to touch invalid files. Claude Code is registered via `claude mcp add --scope user`.
+- **Performance:** the first real sync took 11 minutes because embedding full-length messages runs ~10/s on this CPU. Fixes:
+  - text is imported first (searchable immediately), and embedding runs separately in batches with progress;
+  - only the first 1,000 chars are embedded;
+  - messages under 20 chars are skipped.
+  - A cross-process `flock` keeps several MCP servers (one per agent window) from syncing at once.
+- **Search:** keyword search drops filler words. Previously "why did we pick X" matched every "why"/"we".
+- **Flaky TUI test fixed (pre-existing, ~1/12):** the poller and a finished reply could rebuild the sidebar concurrently. Rebuilds are now serialized by a lock.
+- Tests: 121 passed (3 runs). Ruff and mypy clean.

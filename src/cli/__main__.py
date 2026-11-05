@@ -1,25 +1,251 @@
-"""Entry point: `python -m src.cli` or `nexus`."""
+"""`nexus` command line.
+
+nexus                      open the terminal UI (memory browser + chat)
+nexus sync [--watch]       import new history from Claude Code, Codex, Gemini CLI, Cursor
+nexus import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data export
+nexus search QUERY         search all memory from the shell
+nexus connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = show status
+nexus disconnect TOOL
+nexus status               what is stored, per source
+nexus mcp                  run the MCP server (started for you by connected tools)
+"""
 
 from __future__ import annotations
 
+import argparse
+import asyncio
 import logging
+import sys
+from pathlib import Path
 
-from src.config import load_settings
+from src.config import Settings, load_settings
 
 
-def main() -> None:
-    settings = load_settings()
+def _log_to_file(settings: Settings, name: str = "nexus.log") -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
-    # Never log to the terminal while the TUI owns it.
     logging.basicConfig(
-        filename=settings.data_dir / "nexus.log",
+        filename=settings.data_dir / name,
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+async def _with_service(settings: Settings, fn):  # type: ignore[no-untyped-def]
+    from src.core.chat import ChatService
+
+    print("Opening memory…", file=sys.stderr, flush=True)
+    service = await ChatService.create(settings)
+    try:
+        return await fn(service)
+    finally:
+        await service.close()
+
+
+def _print_report(report) -> None:  # type: ignore[no-untyped-def]
+    from src.core.models import SOURCE_LABELS
+
+    if report.messages_added:
+        per = ", ".join(f"{SOURCE_LABELS.get(k, k)}: {v}" for k, v in report.by_source.items())
+        print(f"Imported {report.messages_added} new messages ({per}).")
+    else:
+        print("Memory is up to date.")
+    for err in report.errors:
+        print(f"  warning: {err}", file=sys.stderr)
+
+
+def _progress(done: int, total: int) -> None:
+    end = "\n" if done >= total else ""
+    print(f"\rEmbedding for semantic search: {done}/{total}", end=end, flush=True)
+
+
+def cmd_sync(settings: Settings, args: argparse.Namespace) -> int:
+    from src.ingest.runner import scan, sync_lock, watch
+
+    async def run(service):  # type: ignore[no-untyped-def]
+        with sync_lock(settings.data_dir) as acquired:
+            if not acquired:
+                print("Another NexusAI process is syncing right now; try again shortly.")
+                return 1
+            _print_report(await scan(service, force=args.force, index=False))
+            await service.backfill_index(progress=_progress)
+        if args.watch:
+            print(f"Watching for new conversations every {args.interval:.0f}s (Ctrl+C to stop)…")
+            await watch(service, interval=args.interval)
+        return 0
+
+    try:
+        return int(asyncio.run(_with_service(settings, run)))
+    except KeyboardInterrupt:
+        return 0
+
+
+def cmd_import(settings: Settings, args: argparse.Namespace) -> int:
+    from src.ingest.exports import ExportFormatError
+    from src.ingest.runner import import_file
+
+    paths = [Path(f).expanduser() for f in args.files]
+    missing = [p for p in paths if not p.is_file()]
+    for path in missing:
+        print(f"{path}: file not found", file=sys.stderr)
+    paths = [p for p in paths if p not in missing]
+
+    async def run(service):  # type: ignore[no-untyped-def]
+        code = 1 if missing else 0
+        for path in paths:
+            try:
+                report = await import_file(service, path, index=False)
+            except ExportFormatError as e:
+                print(str(e), file=sys.stderr)
+                code = 1
+                continue
+            print(
+                f"{path.name}: {report.conversations} conversations, "
+                f"{report.messages_added} new messages."
+            )
+        return code
+
+    return int(asyncio.run(_with_service(settings, run)))
+
+
+def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
+    from src.memory_mcp.server import format_hits
+
+    async def run(service):  # type: ignore[no-untyped-def]
+        hits = await service.search(" ".join(args.query), k=args.limit, source=args.source)
+        print(format_hits(hits))
+
+    asyncio.run(_with_service(settings, run))
+    return 0
+
+
+def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
+    from src.core.db import Database
+    from src.core.models import SOURCE_LABELS
+
+    async def run() -> None:
+        async with Database(settings.db_path) as db:
+            counts = await db.source_counts()
+            total = await db.max_message_id()
+        print(f"Memory: {settings.data_dir}")
+        if not counts:
+            print("  (empty) run `nexus sync` to import your AI tools' history")
+        for source, n in counts.items():
+            print(f"  {SOURCE_LABELS.get(source, source):<22} {n:>5} conversations")
+        print(f"  {'messages (total)':<22} {total:>5}")
+
+    asyncio.run(run())
+    print()
+    return cmd_connect(settings, argparse.Namespace(tool=None))
+
+
+def cmd_connect(_: Settings, args: argparse.Namespace) -> int:
+    from src.connect import targets
+
+    all_targets = targets()
+    if not args.tool:
+        print("AI tools (MCP access to memory):")
+        for t in all_targets.values():
+            state = (
+                "connected"
+                if t.connected()
+                else "not connected"
+                if t.installed()
+                else "not installed"
+            )
+            print(f"  {t.name:<15} {t.label:<15} {state}")
+        print("\nConnect with: nexus connect <tool>   or   nexus connect all")
+        return 0
+    if args.tool == "all":
+        chosen = [t for t in all_targets.values() if t.installed()]
+    elif args.tool in all_targets:
+        chosen = [all_targets[args.tool]]
+    else:
+        print(
+            f"Unknown tool {args.tool!r}. Choose from: {', '.join(all_targets)}, all",
+            file=sys.stderr,
+        )
+        return 2
+    code = 0
+    for t in chosen:
+        try:
+            print(f"{t.label}: {t.connect()}")
+        except Exception as e:
+            print(f"{t.label}: failed: {e}", file=sys.stderr)
+            code = 1
+    return code
+
+
+def cmd_disconnect(_: Settings, args: argparse.Namespace) -> int:
+    from src.connect import targets
+
+    t = targets().get(args.tool)
+    if t is None:
+        print(f"Unknown tool {args.tool!r}", file=sys.stderr)
+        return 2
+    print(f"{t.label}: {t.disconnect()}")
+    return 0
+
+
+def cmd_mcp(_: Settings, __: argparse.Namespace) -> int:
+    from src.memory_mcp.server import main as mcp_main
+
+    mcp_main()
+    return 0
+
+
+def cmd_tui(settings: Settings, _: argparse.Namespace) -> int:
+    _log_to_file(settings)  # never log to the terminal while the TUI owns it
     from src.cli.app import NexusApp
 
     NexusApp(settings).run()
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="nexus", description="Shared local memory for all your AI tools."
+    )
+    sub = parser.add_subparsers(dest="command")
+    p = sub.add_parser("sync", help="import new history from local AI tools")
+    p.add_argument("--watch", action="store_true", help="keep running and import continuously")
+    p.add_argument("--interval", type=float, default=30.0)
+    p.add_argument("--force", action="store_true", help="re-read every file")
+    p = sub.add_parser("import", help="import ChatGPT / claude.ai / Gemini Takeout exports")
+    p.add_argument("files", nargs="+")
+    p = sub.add_parser("search", help="search memory")
+    p.add_argument("query", nargs="+")
+    p.add_argument("--source")
+    p.add_argument("--limit", type=int, default=8)
+    p = sub.add_parser("connect", help="give AI tools access to memory via MCP")
+    p.add_argument("tool", nargs="?")
+    p = sub.add_parser("disconnect", help="remove NexusAI from an AI tool")
+    p.add_argument("tool")
+    sub.add_parser("status", help="what is stored, and which tools are connected")
+    sub.add_parser("mcp", help="run the MCP server on stdio")
+    sub.add_parser("tui", help="open the terminal UI (default)")
+    return parser
+
+
+COMMANDS = {
+    "sync": cmd_sync,
+    "import": cmd_import,
+    "search": cmd_search,
+    "connect": cmd_connect,
+    "disconnect": cmd_disconnect,
+    "status": cmd_status,
+    "mcp": cmd_mcp,
+    "tui": cmd_tui,
+    None: cmd_tui,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    settings = load_settings()
+    if args.command not in ("tui", None, "mcp"):
+        logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    return COMMANDS[args.command](settings, args)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

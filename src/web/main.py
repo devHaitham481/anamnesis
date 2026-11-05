@@ -32,7 +32,7 @@ from src.core.chat import (
     UserSaved,
 )
 from src.core.db import ThreadNotFoundError
-from src.core.models import Message, SearchHit, Thread
+from src.core.models import SOURCE_LABELS, Message, SearchHit, Thread
 from src.providers.router import ProviderError, UnknownModelError
 
 log = logging.getLogger(__name__)
@@ -161,12 +161,21 @@ def create_app(
         app.state.service = service
         app.state.hub = hub
         watcher = asyncio.create_task(watch_changes(service, hub, settings.sync_interval))
+        background = [watcher]
+        if settings.memory_sync:
+            from src.ingest.runner import watch as memory_sync
+
+            background.append(
+                asyncio.create_task(memory_sync(service, settings.memory_sync_interval))
+            )
         try:
             yield
         finally:
-            watcher.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await watcher
+            for task in background:
+                task.cancel()
+            for task in background:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
             for task in list(app.state.chat_tasks):
                 task.cancel()
             await asyncio.gather(*app.state.chat_tasks, return_exceptions=True)
@@ -223,8 +232,21 @@ def create_app(
         return ModelsResponse(default=service.default_model, models=infos)
 
     @app.get("/api/threads")
-    async def list_threads(request: Request) -> list[Thread]:
-        return await svc(request).list_threads()
+    async def list_threads(
+        request: Request,
+        source: str | None = Query(default=None, max_length=40),
+        limit: int = Query(default=200, ge=1, le=1000),
+    ) -> list[Thread]:
+        return await svc(request).list_threads(limit=limit, source=source or None)
+
+    @app.get("/api/sources")
+    async def sources(request: Request) -> list[dict[str, Any]]:
+        """Which tools the memory holds conversations from (for the source filter)."""
+        counts = await svc(request).source_counts()
+        return [
+            {"name": name, "label": SOURCE_LABELS.get(name, name), "threads": n}
+            for name, n in counts.items()
+        ]
 
     @app.post("/api/threads", status_code=201)
     async def create_thread(request: Request, body: ThreadCreate) -> Thread:
@@ -267,8 +289,9 @@ def create_app(
         request: Request,
         q: str = Query(min_length=1, max_length=1000),
         k: int = Query(default=10, ge=1, le=50),
+        source: str | None = Query(default=None, max_length=40),
     ) -> list[SearchHit]:
-        return await svc(request).search(q, k=k)
+        return await svc(request).search(q, k=k, source=source or None)
 
     async def preflight(service: ChatService, thread_id: str, model: str | None) -> str:
         """Validate a chat turn before streaming; returns the model alias to use."""

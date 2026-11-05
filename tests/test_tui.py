@@ -41,9 +41,13 @@ async def test_chat_flow_streams_and_persists(service: ChatService, fake_llm: Fa
         assert app.thread_id is not None
         msgs = await service.messages(app.thread_id)
         assert [m.role for m in msgs] == ["user", "assistant"]
-        items = list(app.query(ThreadItem))
-        assert len(items) == 1 and items[0].has_class("current")
-        assert app.sub_title == "Hello there NexusAI"
+        await wait_until(
+            pilot,
+            lambda: (
+                [i.has_class("current") for i in app.query(ThreadItem)] == [True]
+                and app.sub_title == "Hello there NexusAI"
+            ),
+        )
 
 
 async def test_long_stream_renders_progressively(service: ChatService, fake_llm: FakeLLM) -> None:

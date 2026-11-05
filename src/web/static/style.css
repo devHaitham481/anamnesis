@@ -57,6 +57,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   width: 100%; padding: 7px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--panel);
 }
+#source-filter {
+  width: 100%; margin-top: 6px; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+.src-badge {
+  display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  padding: 0 5px; margin-right: 4px; border-radius: 4px; vertical-align: 1px;
+  border: 1px solid var(--border); color: var(--muted);
+}
 #threads, #search-list { list-style: none; margin: 0; padding: 0 8px 8px; overflow-y: auto; flex: 1; min-height: 0; }
 #search-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #search-results[hidden], #threads[hidden] { display: none; }

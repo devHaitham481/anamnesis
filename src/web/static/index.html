@@ -14,7 +14,10 @@
         <button id="new-thread" class="btn primary" title="New thread (Ctrl+Alt+N)">+ New</button>
       </div>
       <form id="search-form" role="search">
-        <input id="search" type="search" placeholder="Search all chats…" autocomplete="off">
+        <input id="search" type="search" placeholder="Search all memory…" autocomplete="off">
+        <select id="source-filter" aria-label="Show conversations from">
+          <option value="">All tools</option>
+        </select>
       </form>
       <div id="search-results" hidden>
         <div class="list-head"><span>Results</span><button id="clear-search" class="link">Close</button></div>

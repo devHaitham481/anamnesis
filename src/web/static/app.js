@@ -24,7 +24,11 @@
     pendingSend: null,      // text waiting for a thread to be created
     ws: null,
     retry: 0,
+    source: "",             // thread-list / search filter ("" = all tools)
+    sourceLabels: {},       // source name -> human label
   };
+
+  function sourceLabel(name) { return state.sourceLabels[name] || name || ""; }
 
   // ---------- HTTP ----------
 
@@ -68,7 +72,7 @@
       title.textContent = t.title || "Untitled";
       const meta = document.createElement("span");
       meta.className = "thread-meta";
-      meta.textContent = t.model + " · " + fmtTime(t.updated_at);
+      meta.textContent = sourceLabel(t.source) + " · " + fmtTime(t.updated_at);
       const del = document.createElement("button");
       del.className = "thread-del";
       del.title = "Delete thread";
@@ -199,13 +203,31 @@
 
   // ---------- actions ----------
 
+  async function loadSources() {
+    const sources = await api("/api/sources");
+    const select = $("#source-filter");
+    const keep = state.source;
+    select.length = 1;  // keep "All tools"
+    for (const s of sources) {
+      state.sourceLabels[s.name] = s.label;
+      const opt = document.createElement("option");
+      opt.value = s.name;
+      opt.textContent = s.label + " (" + s.threads + ")";
+      select.appendChild(opt);
+    }
+    select.value = sources.some((s) => s.name === keep) ? keep : "";
+    state.source = select.value;
+  }
+
   async function loadThreads() {
     const requestedFor = state.threadId;
-    const threads = await api("/api/threads");
-    // A newer thread may have been created/opened while this request was in flight.
-    if (state.threadId !== requestedFor) return;
+    const filter = state.source;
+    const threads = await api("/api/threads" + (filter ? "?source=" + encodeURIComponent(filter) : ""));
+    // A newer thread may have been created/opened (or the filter changed) while in flight.
+    if (state.threadId !== requestedFor || state.source !== filter) return;
     state.threads = threads;
-    if (state.threadId && !state.threads.some((t) => t.id === state.threadId)) {
+    // With a filter active the open thread may just be hidden, not deleted.
+    if (!filter && state.threadId && !state.threads.some((t) => t.id === state.threadId)) {
       state.threadId = null;
       clearMessages();
       history.replaceState(null, "", location.pathname);
@@ -296,7 +318,8 @@
     $("#search-results").hidden = false;
     $("#threads").hidden = true;
     let hits = [];
-    try { hits = await api("/api/search?q=" + encodeURIComponent(q) + "&k=20"); }
+    const src = state.source ? "&source=" + encodeURIComponent(state.source) : "";
+    try { hits = await api("/api/search?q=" + encodeURIComponent(q) + "&k=20" + src); }
     catch (e) { addNote(e.message, "error"); }
     if (!hits.length) {
       const li = document.createElement("li");
@@ -309,7 +332,10 @@
       li.className = "hit";
       const title = document.createElement("span");
       title.className = "thread-title";
-      title.textContent = (h.thread_title || "Untitled") + " · " + h.role;
+      const badge = document.createElement("span");
+      badge.className = "src-badge";
+      badge.textContent = sourceLabel(h.source);
+      title.append(badge, (h.thread_title || "Untitled") + " · " + h.role);
       const snip = document.createElement("span");
       snip.className = "hit-snippet";
       snip.textContent = h.content.length > 180 ? h.content.slice(0, 179) + "…" : h.content;
@@ -366,7 +392,10 @@
   let threadsTimer = null;
   function refreshThreadsSoon() {
     clearTimeout(threadsTimer);
-    threadsTimer = setTimeout(() => loadThreads().catch(() => {}), 150);
+    threadsTimer = setTimeout(() => {
+      loadSources().catch(() => {});
+      loadThreads().catch(() => {});
+    }, 150);
   }
 
   function handleEvent(e) {
@@ -445,6 +474,12 @@
     });
     $("#search").addEventListener("search", () => { if (!$("#search").value) closeSearch(); });
     $("#clear-search").addEventListener("click", closeSearch);
+    $("#source-filter").addEventListener("change", (e) => {
+      state.source = e.target.value;
+      const q = $("#search").value.trim();
+      loadThreads().catch((err) => addNote(err.message, "error"));
+      if (q) runSearch(q);
+    });
     $("#toggle-sidebar").addEventListener("click", (e) => {
       e.stopPropagation();
       document.body.classList.toggle("sidebar-open");
@@ -462,6 +497,7 @@
       state.models = info.models;
       state.model = info.default;
       renderModels();
+      await loadSources().catch(() => {});
       await loadThreads();
       const wanted = location.hash.slice(1);
       if (wanted && state.threads.some((t) => t.id === wanted)) await openThread(wanted);

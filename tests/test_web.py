@@ -225,3 +225,29 @@ def test_module_level_app_imports() -> None:
     from src.web import main
 
     assert main.app.title == "NexusAI"
+
+
+def test_sources_and_source_filter(client: TestClient) -> None:
+    from src.core.models import ImportedConversation, ImportedMessage
+
+    service = client.app.state.service  # type: ignore[attr-defined]
+    conv = ImportedConversation(
+        source="chatgpt",
+        external_id="g1",
+        title="Lisbon trip",
+        messages=[
+            ImportedMessage(
+                external_id="1", role="user", content="trip to lisbon ideas", created_at=1.0
+            )
+        ],
+    )
+    client.portal.call(service.import_conversation, conv)  # type: ignore[attr-defined]
+    client.post("/api/threads", json={})
+    sources = {s["name"]: s for s in client.get("/api/sources").json()}
+    assert sources["chatgpt"] == {"name": "chatgpt", "label": "ChatGPT", "threads": 1}
+    assert sources["nexus"]["threads"] == 1
+    only = client.get("/api/threads", params={"source": "chatgpt"}).json()
+    assert [t["title"] for t in only] == ["Lisbon trip"] and only[0]["source"] == "chatgpt"
+    hits = client.get("/api/search", params={"q": "lisbon", "source": "chatgpt"}).json()
+    assert hits and all(h["source"] == "chatgpt" for h in hits)
+    assert client.get("/api/search", params={"q": "lisbon", "source": "codex"}).json() == []

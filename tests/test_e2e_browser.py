@@ -45,6 +45,7 @@ def server(tmp_path: Path) -> Iterator[tuple[str, Settings, FakeLLM]]:
         gemini_api_key=None,
         data_dir=tmp_path / "data",
         sync_interval=0.2,
+        memory_sync=False,
     )
     llm = FakeLLM()
     llm.reply = REPLY

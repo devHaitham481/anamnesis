@@ -1,69 +1,95 @@
 # NexusAI
 
-Local-first, multi-provider AI workspace. Chat with **Claude** and **Gemini** from a terminal UI or a web dashboard. Both interfaces share one local memory, so history is persisted, searchable, mirrored live between the terminal and the browser, and automatically recalled across threads and models.
+**One local memory shared by all your AI tools.** NexusAI collects your conversations from Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini into one searchable store on your machine. Every MCP-capable agent can then recall them: ask Claude Code "what did we decide about auth last week?" and it can find the answer, even if that discussion happened in Cursor or ChatGPT.
 
-- **One gateway:** every request goes through `ProviderRouter` (LiteLLM) and comes back in one shape (`CompletionResult` / `StreamChunk`).
-- **Local memory:** SQLite (threads, messages, FTS5 keyword search) + LanceDB vectors with a local ONNX embedding model (`fastembed`, no API calls). Nothing leaves your machine except the prompt sent to the provider you pick.
-- **RAG:** each prompt gets relevant snippets from *other* conversations (cosine ≥ 0.6), plus the recent thread history.
-- **Two interfaces, one state:** Textual TUI and a FastAPI + WebSocket web UI. Messages written by either appear in the other within about a second.
+- **Collects automatically:** local session logs from Claude Code, Codex, Gemini CLI and Cursor are imported in the background, incrementally.
+- **Imports web chats:** ChatGPT, claude.ai (this also covers Claude Desktop chats, which are stored server-side) and Gemini (Google Takeout) data exports.
+- **Gives it back to your agents** through an MCP server: `search_memory`, `recent_conversations`, `get_conversation`, `remember`.
+- **Private by default:** SQLite plus a LanceDB vector index with a local embedding model. Nothing is uploaded, and no API key is needed for the memory itself.
+- **Browse it:** a terminal UI and a web UI to search and read everything, filtered by tool. You can also chat with Claude or Gemini from them; those chats get the same memory as context.
 
 ## Quick start
 
 ```bash
-uv venv -p 3.13 .venv            # Python ≥ 3.11
-uv pip install -p .venv -e ".[dev]"
-cp .env.example .env              # add ANTHROPIC_API_KEY and/or GEMINI_API_KEY
+uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"
 
-.venv/bin/python -m src.cli       # terminal UI        (or: .venv/bin/nexus)
-.venv/bin/python -m src.web       # web UI on :8000     (or: .venv/bin/nexus-web)
+.venv/bin/nexus sync              # import your existing history (first run: model download + embedding)
+.venv/bin/nexus connect           # see which AI tools are installed / connected
+.venv/bin/nexus connect all       # give all of them access to the memory (MCP)
 ```
 
-On first start the embedding model (~130 MB) is downloaded once into `~/.nexus-ai/models`. If it can't be downloaded (e.g. offline), NexusAI still works with keyword-only memory and back-fills vectors on a later start.
+After `connect`, restart the tool (or open a new session). Agents will use `search_memory` when you refer to earlier work, and `remember` to save decisions. While any connected tool is running, new conversations keep syncing in the background.
+
+### What gets imported
+
+| Tool | How | Where it reads from |
+|---|---|---|
+| Claude Code | automatic | `~/.claude/projects/*/*.jsonl` |
+| Codex CLI | automatic | `~/.codex/sessions/**/rollout-*.jsonl[.zst]` |
+| Gemini CLI | automatic | `~/.gemini/tmp/*/chats/session-*` |
+| Cursor | automatic | `Cursor/User/globalStorage/state.vscdb` (read-only) |
+| ChatGPT | `nexus import <export.zip>` | Settings → Data controls → Export data |
+| claude.ai / Claude Desktop | `nexus import <export.zip>` | Settings → Privacy → Export data |
+| Gemini (web) | `nexus import <takeout.zip>` | Google Takeout → My Activity → *Gemini Apps*, format **JSON** |
+
+Only what you and the assistant *said* is kept: tool calls, tool output, reasoning, injected system context and subagent chatter are skipped. Re-importing is safe, because only new messages are added.
+
+### Commands
+
+```
+nexus                      terminal UI (memory browser + chat)
+nexus sync [--watch]       import new local history now (or keep watching)
+nexus import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
+nexus search QUERY         search everything from the shell  [--source chatgpt]
+nexus connect [TOOL|all]   claude-code, claude-desktop, cursor, gemini-cli, codex
+nexus disconnect TOOL
+nexus status               what is stored per tool, and which tools are connected
+nexus mcp                  the MCP server (connected tools start it for you)
+```
+
+`connect` merges into each tool's existing config and writes a `.bak` copy first. For Claude Code it runs `claude mcp add --scope user nexus …`.
 
 ## Terminal UI
 
+The sidebar shows every conversation with a source badge (`CC` Claude Code, `CX` Codex, `GC` Gemini CLI, `CU` Cursor, `GPT` ChatGPT, `CL` claude.ai, `GW` Gemini web, `NX` NexusAI, `NB` notes).
+
 | Key / command | Action |
 |---|---|
-| `Ctrl+N` / `/new [title]` | New thread |
-| `Ctrl+T` / `/model [claude\|gemini]` | Switch model (per thread, mid-conversation is fine) |
-| `Ctrl+L` | Focus the thread list (↑/↓, Enter to open) |
-| `/history`, `/search <query>`, `/open N` | List threads / search all messages, then open item N |
-| `/rename <title>`, `/delete` (twice to confirm) | Manage the current thread |
-| `/help`, `Ctrl+Q` | Help, quit |
-
-Logs go to `~/.nexus-ai/nexus.log`.
+| `/search <query>`, `/open N` | Search all memory, open a result |
+| `/history [source]` | Recent conversations, e.g. `/history chatgpt` |
+| `/sync` | Import new history now |
+| `Ctrl+N` / `/new`, `Ctrl+T` / `/model` | New NexusAI chat, switch Claude ↔ Gemini |
+| `/rename`, `/delete` (twice), `/help`, `Ctrl+Q` | Manage, help, quit |
 
 ## Web UI & API
 
-Open http://127.0.0.1:8000. Double-click the title to rename a thread. Use the search box to search all chats.
+`.venv/bin/nexus-web`, then open http://127.0.0.1:8000. Use the search box and the "All tools" filter to browse memory.
 
 | Endpoint | |
 |---|---|
-| `GET /api/health`, `GET /api/models` | Status, model availability (reports missing keys) |
-| `GET/POST /api/threads`, `GET/PATCH/DELETE /api/threads/{id}` | Threads |
-| `GET /api/threads/{id}/messages` | Messages |
-| `GET /api/search?q=` | Semantic + keyword search |
-| `POST /api/threads/{id}/chat` | One chat turn as **Server-Sent Events** |
-| `WS /ws` | `{"type":"send","thread_id","content","model"}` → broadcast `stream_start` / `delta` / `message` / `stream_end` / `threads_changed` |
+| `GET /api/sources` | Tools with conversation counts |
+| `GET /api/threads?source=`, `GET /api/threads/{id}/messages` | Browse |
+| `GET /api/search?q=&source=` | Semantic + keyword search |
+| `POST /api/threads/{id}/chat` (SSE), `WS /ws` | Chat with Claude/Gemini (needs API keys) |
 
-```bash
-T=$(curl -s -XPOST localhost:8000/api/threads -H 'content-type: application/json' -d '{}' | jq -r .id)
-curl -N -XPOST localhost:8000/api/threads/$T/chat -H 'content-type: application/json' -d '{"content":"Hello"}'
-```
-
-**Using it from other devices:** the server binds to `127.0.0.1` by default. To reach it from your phone or another laptop, set `NEXUS_HOST=0.0.0.0`, list the hostnames/IPs you'll use in `NEXUS_ALLOWED_HOSTS`, and set `NEXUS_AUTH_TOKEN`. Then open `http://<host>:8000/?token=<token>` once on each device (the token is remembered). Cross-origin WebSocket connections are always rejected.
+To reach it from other devices, set `NEXUS_HOST=0.0.0.0`, `NEXUS_ALLOWED_HOSTS` and `NEXUS_AUTH_TOKEN`, then open `http://<host>:8000/?token=<token>` once.
 
 ## Configuration
 
-All settings come from `.env` or the environment (see `.env.example`). Keys are never hard-coded or logged.
+Everything comes from `.env` or the environment (see `.env.example`). API keys (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) are only needed for chatting inside NexusAI. Data lives in `~/.nexus-ai` (`NEXUS_DATA_DIR`). Logs are in `nexus.log` and `mcp.log` there.
 
 ## Development
 
 ```bash
-.venv/bin/pytest -q                       # unit, TUI (pilot), web and e2e browser tests (no network)
-.venv/bin/pytest -m integration           # live Claude/Gemini calls (needs keys)
-.venv/bin/ruff check --fix . && .venv/bin/mypy src
-uv pip install -p .venv -e ".[e2e]" && .venv/bin/playwright install chromium   # enables the browser test
+.venv/bin/pytest -q                  # everything offline: importers, MCP over stdio, TUI, web, browser e2e
+.venv/bin/pytest -m integration      # live Claude/Gemini calls (needs keys + credit)
+.venv/bin/ruff check . && .venv/bin/mypy src
 ```
 
-Layout: `src/providers` (router), `src/core` (db, vector, context, chat service), `src/cli` (TUI), `src/web` (API + static UI). The TUI and web layers talk only to `ChatService`, never to the database directly.
+Layout:
+- `src/ingest`: one parser per tool, plus the incremental scanner
+- `src/memory_mcp`: the MCP server
+- `src/connect.py`: tool registration
+- `src/core`: storage, search, chat service
+- `src/providers`: LiteLLM router
+- `src/cli`, `src/web`: the interfaces

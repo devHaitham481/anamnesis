@@ -14,7 +14,7 @@ from typing import Any
 
 import aiosqlite
 
-from src.core.models import Message, Role, SearchHit, Thread
+from src.core.models import ImportedConversation, Message, Role, SearchHit, Thread
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS providers (
@@ -54,9 +54,33 @@ CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
     INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
 END;
+CREATE TABLE IF NOT EXISTS ingest_state (
+    path       TEXT PRIMARY KEY,
+    signature  TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 """
 
-_THREAD_COLS = "id, title, model, system_prompt, created_at, updated_at"
+# Columns added after the first release; added in place on open (old databases keep working).
+_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
+    "threads": [
+        ("source", "TEXT NOT NULL DEFAULT 'nexus'"),
+        ("project", "TEXT"),
+        ("external_id", "TEXT"),
+    ],
+    "messages": [("external_id", "TEXT")],
+}
+_POST_MIGRATION = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_external ON threads(source, external_id)
+    WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external ON messages(thread_id, external_id)
+    WHERE external_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_threads_source ON threads(source, updated_at DESC);
+"""
+
+_THREAD_COLS = (
+    "id, title, model, system_prompt, created_at, updated_at, source, project, external_id"
+)
 _MSG_COLS = "id, thread_id, role, content, provider, model, created_at"
 
 
@@ -64,9 +88,23 @@ class ThreadNotFoundError(LookupError):
     pass
 
 
+_STOPWORDS = frozenset(
+    """a an and are as at be but by can could did do does for from had has have how i if in is
+    it its me my of on or our so than that the their them then there these this to was we were
+    what when where which who why will with would you your about into just also not no yes
+    der die das und ist ich wir""".split()
+)
+
+
 def _fts_query(text: str) -> str | None:
-    """Turn free text into a safe FTS5 query: quoted tokens, OR-ed, prefix-matched."""
+    """Turn free text into a safe FTS5 query: quoted tokens, OR-ed, prefix-matched.
+
+    Filler words are dropped (they match everything and drown out the real terms) unless the
+    query consists only of them.
+    """
     tokens = re.findall(r"\w+", text)
+    meaningful = [t for t in tokens if t.lower() not in _STOPWORDS and len(t) > 1]
+    tokens = meaningful or tokens
     if not tokens:
         return None
     return " OR ".join(f'"{t}"*' for t in tokens)
@@ -89,8 +127,19 @@ class Database:
             await self._conn.execute("PRAGMA foreign_keys=ON")
             await self._conn.execute("PRAGMA busy_timeout=5000")
             await self._conn.executescript(SCHEMA)
+            await self._migrate()
             await self._conn.commit()
         return self
+
+    async def _migrate(self) -> None:
+        conn = self.conn
+        for table, columns in _MIGRATIONS.items():
+            async with conn.execute(f"PRAGMA table_info({table})") as cur:
+                existing = {row[1] for row in await cur.fetchall()}
+            for name, decl in columns:
+                if name not in existing:
+                    await conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+        await conn.executescript(_POST_MIGRATION)
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -164,7 +213,8 @@ class Database:
         )
         async with self._write() as conn:
             await conn.execute(
-                f"INSERT INTO threads({_THREAD_COLS}) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO threads(id, title, model, system_prompt, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (thread.id, thread.title, thread.model, thread.system_prompt, now, now),
             )
         return thread
@@ -177,11 +227,21 @@ class Database:
             raise ThreadNotFoundError(thread_id)
         return Thread(**dict(rows[0]))
 
-    async def list_threads(self, limit: int = 200) -> list[Thread]:
+    async def list_threads(
+        self, limit: int = 200, source: str | None = None, project: str | None = None
+    ) -> list[Thread]:
+        where, params = _thread_filter(source, project)
         rows = await self._fetchall(
-            f"SELECT {_THREAD_COLS} FROM threads ORDER BY updated_at DESC LIMIT ?", (limit,)
+            f"SELECT {_THREAD_COLS} FROM threads t {where} ORDER BY updated_at DESC LIMIT ?",
+            (*params, limit),
         )
         return [Thread(**dict(r)) for r in rows]
+
+    async def source_counts(self) -> dict[str, int]:
+        rows = await self._fetchall(
+            "SELECT source, COUNT(*) AS n FROM threads GROUP BY source ORDER BY n DESC"
+        )
+        return {r["source"]: int(r["n"]) for r in rows}
 
     async def update_thread(
         self, thread_id: str, *, title: str | None = None, model: str | None = None
@@ -280,17 +340,26 @@ class Database:
         rows = await self._fetchall(f"SELECT {_MSG_COLS} FROM messages ORDER BY id")
         return [Message(**dict(r)) for r in rows]
 
-    async def search_messages(self, query: str, limit: int = 10) -> list[SearchHit]:
-        """Keyword search via FTS5 (bm25-ranked)."""
+    async def search_messages(
+        self,
+        query: str,
+        limit: int = 10,
+        source: str | None = None,
+        project: str | None = None,
+    ) -> list[SearchHit]:
+        """Keyword search via FTS5 (bm25-ranked), optionally limited to one source/project."""
         fts = _fts_query(query)
         if fts is None:
             return []
+        where, params = _thread_filter(source, project)
+        extra = where.replace("WHERE", "AND", 1)
         rows = await self._fetchall(
-            "SELECT m.id, m.thread_id, m.role, m.content, t.title, bm25(messages_fts) AS rank "
+            "SELECT m.id, m.thread_id, m.role, m.content, m.created_at, t.title, t.source, "
+            "t.project, bm25(messages_fts) AS rank "
             "FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid "
             "JOIN threads t ON t.id = m.thread_id "
-            "WHERE messages_fts MATCH ? ORDER BY rank LIMIT ?",
-            (fts, limit),
+            f"WHERE messages_fts MATCH ? {extra} ORDER BY rank LIMIT ?",
+            (fts, *params, limit),
         )
         return [
             SearchHit(
@@ -300,6 +369,124 @@ class Database:
                 content=r["content"],
                 score=-float(r["rank"]),
                 thread_title=r["title"],
+                source=r["source"],
+                project=r["project"],
+                created_at=r["created_at"],
             )
             for r in rows
         ]
+
+    async def thread_meta(self, thread_ids: list[str]) -> dict[str, Thread]:
+        if not thread_ids:
+            return {}
+        marks = ",".join("?" * len(thread_ids))
+        rows = await self._fetchall(
+            f"SELECT {_THREAD_COLS} FROM threads WHERE id IN ({marks})", tuple(thread_ids)
+        )
+        return {r["id"]: Thread(**dict(r)) for r in rows}
+
+    # ---------- imports from other tools ----------
+
+    async def import_conversation(
+        self, conv: ImportedConversation, model: str
+    ) -> tuple[Thread, list[Message]]:
+        """Upsert a conversation from another tool; returns the thread and only NEW messages.
+
+        Idempotent: threads are keyed by (source, external_id) and messages by
+        (thread, external_id), so re-importing a grown transcript only adds the new tail.
+        """
+        msgs = [m for m in conv.messages if m.content.strip()]
+        first = min((m.created_at for m in msgs), default=time.time())
+        last = max((m.created_at for m in msgs), default=first)
+        title = (conv.title or "").strip()[:200] or None
+        added: list[Message] = []
+        async with self._write() as conn:
+            async with conn.execute(
+                "SELECT id FROM threads WHERE source = ? AND external_id = ?",
+                (conv.source, conv.external_id),
+            ) as cur:
+                row = await cur.fetchone()
+            if row is None:
+                thread_id = uuid.uuid4().hex
+                await conn.execute(
+                    "INSERT INTO threads(id, title, model, created_at, updated_at, source, "
+                    "project, external_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        thread_id,
+                        title or _fallback_title(msgs),
+                        model,
+                        first,
+                        last,
+                        conv.source,
+                        conv.project,
+                        conv.external_id,
+                    ),
+                )
+            else:
+                thread_id = row[0]
+            for m in msgs:
+                cur = await conn.execute(
+                    "INSERT OR IGNORE INTO messages(thread_id, role, content, provider, model, "
+                    "created_at, external_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        thread_id,
+                        m.role,
+                        m.content,
+                        conv.source,
+                        m.model,
+                        m.created_at,
+                        m.external_id,
+                    ),
+                )
+                if cur.rowcount and cur.lastrowid is not None:
+                    added.append(
+                        Message(
+                            id=cur.lastrowid,
+                            thread_id=thread_id,
+                            role=m.role,
+                            content=m.content,
+                            provider=conv.source,
+                            model=m.model,
+                            created_at=m.created_at,
+                        )
+                    )
+            if row is not None and (added or title):
+                await conn.execute(
+                    "UPDATE threads SET title = COALESCE(?, title), "
+                    "project = COALESCE(?, project), updated_at = MAX(updated_at, ?) WHERE id = ?",
+                    (title, conv.project, last, thread_id),
+                )
+        return await self.get_thread(thread_id), added
+
+    async def get_ingest_signature(self, path: str) -> str | None:
+        rows = await self._fetchall("SELECT signature FROM ingest_state WHERE path = ?", (path,))
+        return str(rows[0]["signature"]) if rows else None
+
+    async def set_ingest_signature(self, path: str, signature: str) -> None:
+        async with self._write() as conn:
+            await conn.execute(
+                "INSERT INTO ingest_state(path, signature, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(path) DO UPDATE SET signature=excluded.signature, "
+                "updated_at=excluded.updated_at",
+                (path, signature, time.time()),
+            )
+
+
+def _thread_filter(source: str | None, project: str | None) -> tuple[str, tuple[str, ...]]:
+    clauses: list[str] = []
+    params: list[str] = []
+    if source:
+        clauses.append("t.source = ?")
+        params.append(source)
+    if project:
+        clauses.append("t.project = ?")
+        params.append(project)
+    return ("WHERE " + " AND ".join(clauses) if clauses else ""), tuple(params)
+
+
+def _fallback_title(msgs: list[Any]) -> str:
+    for m in msgs:
+        if m.role == "user":
+            line = " ".join(m.content.split())
+            return line[:60] + ("…" if len(line) > 60 else "")
+    return "Imported conversation"

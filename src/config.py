@@ -13,6 +13,7 @@ DEFAULT_CLAUDE_MODEL = "anthropic/claude-sonnet-5-5"
 DEFAULT_GEMINI_MODEL = "gemini/gemini-3.8-flash"
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 DEFAULT_DATA_DIR = Path.home() / ".nexus-ai"
+PROJECT_ENV = Path(__file__).resolve().parents[1] / ".env"
 
 
 class MissingAPIKeyError(RuntimeError):
@@ -37,6 +38,8 @@ class Settings(BaseModel):
     rag_min_score: float = 0.6
     history_limit: int = 40
     sync_interval: float = 1.0
+    memory_sync: bool = True  # import other AI tools' history in the background
+    memory_sync_interval: float = 60.0
     auth_token: SecretStr | None = None
     allowed_hosts: tuple[str, ...] = ()
 
@@ -72,8 +75,12 @@ def load_settings(
 ) -> Settings:
     """Build Settings from `.env` merged with the process environment (environment wins)."""
     file_values: dict[str, str | None] = {}
-    if env_file is not None and Path(env_file).is_file():
-        file_values = dict(dotenv_values(env_file))
+    path = Path(env_file) if env_file is not None else None
+    if path is not None and not path.is_file() and str(env_file) == ".env":
+        # Launched from elsewhere (e.g. by Claude Desktop as an MCP server): use the project's .env.
+        path = PROJECT_ENV
+    if path is not None and path.is_file():
+        file_values = dict(dotenv_values(path))
     env = {**file_values, **(os.environ if environ is None else environ)}
 
     def get(name: str) -> str | None:
@@ -95,6 +102,10 @@ def load_settings(
         rag_top_k=int(get("NEXUS_RAG_TOP_K") or defaults.rag_top_k),
         rag_min_score=float(get("NEXUS_RAG_MIN_SCORE") or defaults.rag_min_score),
         history_limit=int(get("NEXUS_HISTORY_LIMIT") or defaults.history_limit),
+        memory_sync=_bool(env.get("NEXUS_MEMORY_SYNC"), defaults.memory_sync),
+        memory_sync_interval=float(
+            get("NEXUS_MEMORY_SYNC_INTERVAL") or defaults.memory_sync_interval
+        ),
         auth_token=_secret(env.get("NEXUS_AUTH_TOKEN")),
         allowed_hosts=tuple(
             h.strip() for h in (get("NEXUS_ALLOWED_HOSTS") or "").split(",") if h.strip()

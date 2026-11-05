@@ -9,11 +9,26 @@ from textual.widgets.markdown import MarkdownStream
 
 from src.core.models import Message, Thread
 
+# Short sidebar badges showing which tool a conversation came from.
+SOURCE_TAGS = {
+    "nexus": "NX",
+    "note": "NB",
+    "claude-code": "CC",
+    "codex": "CX",
+    "gemini-cli": "GC",
+    "cursor": "CU",
+    "chatgpt": "GPT",
+    "claude-web": "CL",
+    "gemini-web": "GW",
+}
+
 
 class ThreadItem(ListItem):
     def __init__(self, thread: Thread) -> None:
-        super().__init__(Label(thread.title or "Untitled", markup=False))
+        tag = SOURCE_TAGS.get(thread.source, thread.source[:3].upper())
+        super().__init__(Label(f"{tag:<3} {thread.title or 'Untitled'}", markup=False))
         self.thread_id = thread.id
+        self.source = thread.source
 
 
 class MessageView(Vertical):
