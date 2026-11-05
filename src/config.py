@@ -10,7 +10,7 @@ from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, SecretStr
 
 DEFAULT_CLAUDE_MODEL = "anthropic/claude-sonnet-5-5"
-DEFAULT_GEMINI_MODEL = "gemini/gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini/gemini-3.8-flash"
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 DEFAULT_DATA_DIR = Path.home() / ".nexus-ai"
 
@@ -27,6 +27,8 @@ class Settings(BaseModel):
     claude_model: str = DEFAULT_CLAUDE_MODEL
     gemini_model: str = DEFAULT_GEMINI_MODEL
     default_model: str = "claude"
+    request_timeout: float = 120.0
+    max_retries: int = 2
 
     data_dir: Path = DEFAULT_DATA_DIR
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
@@ -85,6 +87,8 @@ def load_settings(
         claude_model=get("NEXUS_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
         gemini_model=get("NEXUS_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
         default_model=get("NEXUS_DEFAULT_MODEL") or defaults.default_model,
+        request_timeout=float(get("NEXUS_REQUEST_TIMEOUT") or defaults.request_timeout),
+        max_retries=int(get("NEXUS_MAX_RETRIES") or defaults.max_retries),
         data_dir=Path(get("NEXUS_DATA_DIR") or DEFAULT_DATA_DIR).expanduser(),
         embedding_model=get("NEXUS_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL,
         rag_enabled=_bool(env.get("NEXUS_RAG"), defaults.rag_enabled),

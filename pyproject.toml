@@ -45,6 +45,7 @@ include = ["src*"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+addopts = "-m \"not integration\""  # live API tests: `pytest -m integration`
 markers = ["integration: hits real provider APIs (skipped when keys are missing)"]
 filterwarnings = ["error::RuntimeWarning", "ignore::UserWarning:pydantic.*"]
 

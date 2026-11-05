@@ -21,6 +21,7 @@ from src.config import Settings, load_settings
 from src.core.chat import AssistantSaved, ChatService, Delta, UserSaved
 from src.core.db import ThreadNotFoundError
 from src.core.models import Message, Thread
+from src.providers.router import ProviderError
 
 log = logging.getLogger(__name__)
 
@@ -310,11 +311,16 @@ class NexusApp(App[None]):
                     elif self.thread_id == thread_id:
                         await self._mount(MessageView.from_message(ev.message))
         except Exception as e:
-            log.exception("send failed")
+            if isinstance(e, ProviderError):
+                log.warning("provider request failed: %s", e)
+                text = str(e)
+            else:
+                log.exception("send failed")
+                text = f"{type(e).__name__}: {e}"
             if view is not None and view.is_attached:
                 await view.finish()
             if self.thread_id == thread_id:
-                await self._note(f"{type(e).__name__}: {e}", "error")
+                await self._note(text, "error")
             else:
                 self.notify(f"Request failed: {e}", severity="error")
         finally:

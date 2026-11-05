@@ -33,7 +33,7 @@ from src.core.chat import (
 )
 from src.core.db import ThreadNotFoundError
 from src.core.models import Message, SearchHit, Thread
-from src.providers.router import UnknownModelError
+from src.providers.router import ProviderError, UnknownModelError
 
 log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
@@ -387,6 +387,9 @@ async def run_turn(
             await hub.broadcast(payload)
             yield payload
             ev = await anext(events, None)
+    except ProviderError as e:
+        log.warning("provider request failed: %s", e)
+        error = str(e)
     except Exception as e:
         log.exception("chat turn failed")
         error = f"{type(e).__name__}: {e}"

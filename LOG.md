@@ -46,3 +46,13 @@ An independent review agent audited the codebase; all findings fixed with regres
 - Lower priority: provider HTTP stream is closed promptly on cancel (`aclosing` + `aclose`), broadcasts are concurrent with a per-socket timeout, stale `loadThreads` responses are ignored, partial-save tolerates a thread deleted mid-stream.
 - **Known limitation:** the per-thread lock is per process; simultaneous sends to the *same* thread from TUI and web at the same instant are not serialized across processes.
 - Tests: 78 passed, 4 skipped (live provider tests — no API keys in this environment).
+
+## 2026-11-05 — First live run with real API keys
+
+- **Gemini:** `gemini-2.5-flash` was retired for new users (404), so the default is now `gemini/gemini-3.8-flash`, the model Google recommends. During testing 3.8-flash often returned 503 "high demand", so the full live run used `gemini-3.5-flash`. Web server → SSE → DB → assistant reply worked, and a *new* thread correctly recalled a fact from another thread via RAG.
+- **Claude:** the key authenticates, but the account has no API credit (400 "credit balance is too low"). This needs action on the account side.
+- **Hardening from the live run:**
+  - Provider requests now have a bounded `timeout` (`NEXUS_REQUEST_TIMEOUT`, default 120 s) and `num_retries` (`NEXUS_MAX_RETRIES`, default 2). An overloaded provider previously hung a turn for minutes.
+  - LiteLLM exceptions (before or mid-stream) become a one-line `ProviderError`, e.g. "Gemini is temporarily unavailable: …", "Claude request failed: Your credit balance is too low…". TUI and web show it without a class name or JSON dump and log it as a warning, without a traceback.
+  - `pytest` now excludes live tests by default (they cost money and depend on provider uptime); run them with `pytest -m integration`.
+- Tests: 90 passed (+12 router error tests). Ruff and mypy clean.

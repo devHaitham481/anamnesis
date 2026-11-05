@@ -60,7 +60,7 @@ All settings come from `.env` or the environment (see `.env.example`). Keys are 
 ## Development
 
 ```bash
-.venv/bin/pytest -q                       # unit, TUI (pilot), web and e2e browser tests
+.venv/bin/pytest -q                       # unit, TUI (pilot), web and e2e browser tests (no network)
 .venv/bin/pytest -m integration           # live Claude/Gemini calls (needs keys)
 .venv/bin/ruff check --fix . && .venv/bin/mypy src
 uv pip install -p .venv -e ".[e2e]" && .venv/bin/playwright install chromium   # enables the browser test
