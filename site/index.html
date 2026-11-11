@@ -3,625 +3,202 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anamnesis — memory for your agents</title>
-<meta name="description" content="Anamnesis turns your Claude Code, Codex, Gemini CLI, Cursor and chat history into one local memory, and gives it back to every agent over MCP.">
+<title>Anamnesis — one local memory for all your AI tools</title>
+<meta name="description" content="Anamnesis imports your Claude Code, Codex, Cursor, Gemini and ChatGPT history into one local database and gives every agent access to it over MCP.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --paper: #f6f2ea;
-  --paper-2: #ede6da;
-  --ink: #221f1b;
-  --muted: #6b6258;
-  --line: #221f1b1f;
-  --terracotta: #b0532d;
-  --terracotta-2: #943f1e;
-  --ochre: #e0ad5a;
-  --on-dark: #f3ece1;
-  --on-dark-muted: #b9ad9e;
-  --line-dark: #f3ece124;
-  --term: #191714;
-  --term-dim: #8f877b;
-  --term-ok: #a9c28b;
-  --term-hl: #eaa978;
-  --serif: "Newsreader", Georgia, serif;
-  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
-  --gutter: clamp(16px, 5vw, 64px);
-  --max: 1280px;
-  --ease: cubic-bezier(.2, .7, .2, 1);
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 72px; }
-body {
-  margin: 0; background: var(--paper); color: var(--ink);
-  font-family: var(--sans); font-size: 17px; line-height: 1.6;
-  -webkit-font-smoothing: antialiased; overflow-x: hidden;
-}
-a { color: inherit; }
-button { font: inherit; color: inherit; }
-code { font-family: var(--mono); font-size: .82em; }
-.wrap { width: min(var(--max), 100% - 2 * var(--gutter)); margin-inline: auto; }
+  :root {
+    --bg: #faf9f6; --fg: #1c1a17; --muted: #6b665e; --line: #e4e0d8;
+    --accent: #b0532d; --code-bg: #f1eee8; --gutter: 24px;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141311; --fg: #ece8e1; --muted: #9a948a; --line: #2a2825; --accent: #e07a4f; --code-bg: #1d1b19; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-underline-offset: 3px; }
+  code, pre { font-family: var(--mono); font-size: 14px; }
 
-/* ---------- nav ---------- */
-.nav {
-  position: sticky; top: 0; z-index: 50; background: #f6f2eae6; backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-}
-.nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
-.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; flex: none; }
-.logo svg { width: 28px; height: 28px; }
-.logo span { font-family: var(--serif); font-size: 23px; letter-spacing: -.01em; }
-.nav nav { display: flex; gap: 24px; font-size: 15px; color: var(--muted); }
-.nav nav a { text-decoration: none; transition: color .2s; }
-.nav nav a:hover { color: var(--ink); }
-.nav .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .wrap { width: min(1100px, 100% - 2 * var(--gutter)); margin: 0 auto; }
 
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 18px;
-  border-radius: 999px; border: 1px solid transparent; font-weight: 500; font-size: 15px; text-decoration: none; cursor: pointer;
-  transition: background .2s, transform .2s var(--ease); white-space: nowrap;
-}
-.btn:hover { transform: translateY(-1px); }
-.btn-ink { background: var(--ink); color: var(--paper); }
-.btn-ink:hover { background: #000; }
-.btn-paper { background: var(--paper); color: var(--ink); }
-.btn-paper:hover { background: #fff; }
-.copy {
-  display: inline-flex; align-items: center; gap: 10px; height: 42px; padding: 0 6px 0 16px; border-radius: 999px;
-  border: 1px solid var(--line); background: transparent; font-family: var(--mono); font-size: 13.5px; cursor: pointer;
-  transition: border-color .2s; white-space: nowrap;
-}
-.copy:hover { border-color: currentColor; }
-.copy .tag { font-family: var(--sans); font-size: 12px; padding: 5px 10px; border-radius: 999px; background: #221f1b10; }
-.hero .copy, .on-dark .copy { border-color: var(--line-dark); }
-.hero .copy .tag, .on-dark .copy .tag { background: #f3ece11a; }
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .logo { font-weight: 600; text-decoration: none; }
+  .logo span { color: var(--accent); }
+  header nav { display: flex; gap: 24px; font-size: 14px; color: var(--muted); }
+  header nav a { text-decoration: none; }
+  header nav a:hover { color: var(--fg); }
 
-/* ---------- hero ---------- */
-.hero { background: var(--terracotta); color: var(--on-dark); position: relative; overflow: hidden; }
-.hero::after {
-  content: "ἀνάμνησις"; position: absolute; right: -2vw; bottom: -6vw; font-family: var(--serif); font-style: italic;
-  font-size: clamp(120px, 22vw, 360px); line-height: 1; color: #00000014; pointer-events: none; white-space: nowrap;
-}
-.hero .wrap {
-  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
-  gap: clamp(32px, 5vw, 80px); align-items: center; padding-block: clamp(56px, 9vw, 120px);
-}
-.eyebrow { font-family: var(--serif); font-style: italic; font-size: 19px; color: #f3ece1cc; margin: 0 0 18px; }
-h1 {
-  font-family: var(--serif); font-weight: 400; font-size: clamp(42px, 6vw, 84px); line-height: 1; letter-spacing: -.025em;
-  margin: 0 0 24px; text-wrap: balance;
-}
-h1 em { font-style: italic; color: #ffd9b8; }
-.hero .lead { font-size: clamp(17px, 1.6vw, 20px); color: #f3ece1d9; max-width: 34em; margin: 0 0 32px; }
-.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  section { border-bottom: 1px solid var(--line); padding: 72px 0; }
 
-/* search demo */
-.recall {
-  background: var(--paper); color: var(--ink); border-radius: 18px; padding: 10px; min-width: 0;
-  box-shadow: 0 40px 80px -30px #3a150699, 0 0 0 1px #00000014;
-}
-.recall-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 11px; background: #fff; border: 1px solid var(--line); font-size: 16px; min-height: 50px; }
-.recall-bar svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
-.recall-q { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recall-q .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--terracotta); vertical-align: -3px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
-.recall-meta { font-size: 12px; color: var(--muted); padding: 10px 6px 6px; display: flex; justify-content: space-between; gap: 10px; }
-.hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-height: 252px; align-content: start; }
-.hit {
-  padding: 12px 14px; border-radius: 11px; background: #fff; border: 1px solid var(--line);
-  opacity: 0; transform: translateY(8px); transition: opacity .45s var(--ease), transform .45s var(--ease);
-}
-.hit.in { opacity: 1; transform: none; }
-.hit-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-.hit-top .when { margin-left: auto; }
-.hit p { margin: 0; font-size: 14.5px; line-height: 1.45; }
-.hit mark { background: #b0532d1f; color: var(--terracotta-2); padding: 0 2px; border-radius: 3px; }
-.src { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
-.s-cc, .s-cw { background: #f0d6c4; color: #8a3d18; }
-.s-cx { background: #e3ded5; color: #3b3630; }
-.s-gm { background: #d6e2ef; color: #2c4f75; }
-.s-cu { background: #e5dbef; color: #5b3c80; }
-.s-gpt { background: #d6eadd; color: #2c6243; }
-.s-nt { background: #f3e5bf; color: #7a5a12; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+  h1 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.1; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 20px; }
+  .lede { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
 
-/* ---------- sections ---------- */
-section { padding-block: clamp(72px, 10vw, 136px); }
-.on-dark { background: var(--ink); color: var(--on-dark); }
-.alt { background: var(--paper-2); }
-.kicker { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; letter-spacing: .02em; color: var(--terracotta); margin-bottom: 18px; }
-.on-dark .kicker { color: var(--ochre); }
-.kicker .num { font-family: var(--serif); font-style: italic; font-size: 20px; font-weight: 400; }
-h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.02em; margin: 0 0 18px; text-wrap: balance; }
-h2 em { font-style: italic; color: var(--terracotta); }
-.on-dark h2 em { color: var(--ochre); }
-.sub { color: var(--muted); font-size: clamp(17px, 1.5vw, 19px); max-width: 36em; margin: 0; }
-.on-dark .sub { color: var(--on-dark-muted); }
-.head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px 48px; flex-wrap: wrap; margin-bottom: clamp(36px, 5vw, 64px); }
-.head-row > div { max-width: 40rem; }
-.head-row .sub { max-width: 28rem; }
+  .install { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 10px 14px; max-width: 420px; }
+  .install code { overflow-x: auto; white-space: nowrap; }
+  .install code::before { content: "$ "; color: var(--muted); }
+  .copy { font: 500 12px var(--sans); color: var(--muted); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; flex: none; }
+  .copy:hover { color: var(--fg); border-color: var(--muted); }
 
-/* sources */
-.sources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.source { padding: 22px 22px 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; transition: background .25s; }
-.source:hover { background: #ffffff80; }
-.source-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.source b { font-weight: 600; font-size: 17px; }
-.source p { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.5; }
-.how { font-size: 11.5px; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
-.how.live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4f8a5b; margin-right: 6px; vertical-align: 1px; }
+  pre.term { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 20px; line-height: 1.7; overflow-x: auto; }
+  .term .p { color: var(--muted); }
+  .term .a { color: var(--accent); }
 
-/* steps */
-.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 40px); }
-.step { border-top: 2px solid var(--ink); padding-top: 20px; }
-.step .n { font-family: var(--serif); font-style: italic; font-size: 30px; color: var(--terracotta); line-height: 1; }
-.step h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 14px 0 8px; letter-spacing: -.01em; }
-.step p { margin: 0; color: var(--muted); font-size: 16px; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 28px; }
 
-/* feature rows */
-.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 96px); align-items: center; }
-.row.flip > :first-child { order: 2; }
-.facts { list-style: none; padding: 0; margin: 32px 0 0; }
-.facts li { padding: 14px 0 14px 32px; border-top: 1px solid var(--line); position: relative; font-size: 16.5px; }
-.on-dark .facts li { border-color: var(--line-dark); }
-.facts li::before { content: "◆"; position: absolute; left: 4px; top: 15px; font-size: 10px; color: var(--terracotta); }
-.on-dark .facts li::before { color: var(--ochre); }
-.facts code { background: #221f1b10; padding: 2px 6px; border-radius: 5px; }
-.on-dark .facts code { background: #f3ece11a; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+  .grid h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  .grid p { margin: 0; color: var(--muted); }
 
-/* terminal */
-.term {
-  background: var(--term); color: #ebe4d8; border-radius: 14px; overflow: hidden; min-width: 0;
-  font-family: var(--mono); font-size: 13px; line-height: 1.7; box-shadow: 0 40px 80px -40px #221f1b99, 0 0 0 1px #ffffff12;
-}
-.term-head { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 14px; border-bottom: 1px solid #ffffff14; }
-.dots { display: flex; gap: 6px; margin-right: 10px; flex: none; }
-.dots i { width: 10px; height: 10px; border-radius: 50%; background: #ffffff26; display: block; }
-.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
-.tabs button, .tabs span {
-  border: 0; background: none; color: var(--term-dim); font-family: var(--sans); font-size: 13px; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap;
-}
-.tabs span { cursor: default; }
-.tabs button:hover { color: #fff; }
-.tabs .on { background: #ffffff14; color: #fff; }
-.replay { margin-left: auto; flex: none; border: 0; background: none; color: var(--term-dim); cursor: pointer; font-family: var(--sans); font-size: 13px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
-.replay:hover { color: #fff; background: #ffffff10; }
-.term-body { padding: 16px 18px 20px; white-space: pre; overflow-x: auto; min-height: 290px; }
-.term-body .d { color: var(--term-dim); }
-.term-body .k { color: var(--term-hl); }
-.term-body .g { color: var(--term-ok); }
-.term-body .w { color: #fff; }
-.caret-b { display: inline-block; width: 7px; height: 14px; background: #ebe4d8; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
-.devs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 18px 4px; font-family: var(--sans); }
-.dev { border: 1px solid #ffffff1a; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
-.dev b { font-weight: 600; color: #fff; display: block; }
-.dev span { color: var(--term-dim); font-size: 12px; }
-.dev .segs { display: flex; gap: 3px; margin-top: 8px; }
-.dev .segs i { flex: 1; height: 6px; border-radius: 2px; background: #ffffff1f; transition: background .3s; }
-.dev .segs i.f { background: var(--term-ok); }
-.dev.b .segs i.f { background: var(--term-hl); }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 12px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  td:first-child { width: 38%; padding-right: 24px; }
+  td:last-child { color: var(--muted); }
 
-/* install */
-.install-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: clamp(36px, 5vw, 56px); }
-.inst { border: 1px solid var(--line-dark); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.inst .n { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ochre); }
-.inst h3 { margin: 0; font-weight: 600; font-size: 18px; }
-.inst p { margin: 0 0 8px; color: var(--on-dark-muted); font-size: 15px; flex: 1; }
-.inst .copy { width: 100%; justify-content: space-between; }
-.quote { margin: clamp(56px, 8vw, 96px) 0 0; font-family: var(--serif); font-style: italic; font-size: clamp(24px, 3vw, 36px); line-height: 1.25; max-width: 24em; }
-.quote cite { display: block; font-style: normal; font-family: var(--sans); font-size: 14px; color: var(--on-dark-muted); margin-top: 12px; }
+  .sources { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .sources li { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 14px; }
+  .sources li small { color: var(--muted); font-size: 12px; margin-left: 4px; }
 
-/* footer */
-footer { background: var(--ink); color: var(--on-dark-muted); font-size: 14.5px; }
-.meander {
-  height: 22px; opacity: .3;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M0 21H22M0 1H22M2.5 21V4.5H17.5V17.5H7V9H13V13' fill='none' stroke='%23f3ece1' stroke-width='1.3'/%3E%3C/svg%3E");
-  background-size: 22px 22px; background-repeat: repeat-x;
-}
-footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; padding-block: 36px 44px; }
-footer .logo span { color: var(--on-dark); }
-footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
-footer nav a { text-decoration: none; }
-footer nav a:hover { color: var(--on-dark); }
+  .note { margin: 0; max-width: 40em; }
 
-/* reveal */
-.rv { opacity: 0; transform: translateY(20px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
-.rv.in { opacity: 1; transform: none; }
-@keyframes blink { 50% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .rv, .hit { opacity: 1; transform: none; transition: none; }
-  .caret, .caret-b { animation: none; }
-}
+  footer { padding: 32px 0 48px; font-size: 14px; color: var(--muted); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
-/* ---------- responsive ---------- */
-@media (max-width: 1080px) {
-  .nav nav { display: none; }
-  .sources { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 900px) {
-  .hero .wrap, .row { grid-template-columns: minmax(0, 1fr); }
-  .row.flip > :first-child { order: 0; }
-  .steps, .install-grid { grid-template-columns: minmax(0, 1fr); }
-  .hits { min-height: 0; }
-  .term-body { min-height: 0; }
-}
-@media (max-width: 560px) {
-  body { font-size: 16px; }
-  .nav .copy { display: none; }
-  .nav .wrap { height: 58px; }
-  .source { padding: 16px 14px 18px; }
-  .source-top { flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 6px; }
-  .source b { font-size: 15.5px; }
-  .source p { font-size: 13.5px; }
-  .cta .btn, .cta .copy { width: 100%; }
-  .cta .copy { justify-content: space-between; }
-  .term-body { font-size: 11.5px; padding: 14px; }
-  .devs { grid-template-columns: 1fr; }
-  .recall-meta span:last-child { display: none; }
-  .hit-top .when { display: none; }
-  footer .wrap { flex-direction: column; align-items: flex-start; }
-}
+  @media (max-width: 860px) {
+    .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    section { padding: 56px 0; }
+  }
+  @media (max-width: 560px) {
+    :root { --gutter: 16px; }
+    header nav a:not(:last-child) { display: none; }
+    .lede { font-size: 17px; }
+    pre.term { padding: 16px; font-size: 12.5px; }
+    table, tbody, tr, td { display: block; width: 100% !important; }
+    td { padding: 0; border: 0 !important; }
+    tr { padding: 12px 0; border-top: 1px solid var(--line); }
+    tr:first-child { border-top: 0; }
+  }
 </style>
 </head>
 <body>
 
-<header class="nav">
+<header>
   <div class="wrap">
-    <a href="#top" class="logo" aria-label="Anamnesis home">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#b0532d"/><circle cx="16" cy="16" r="12.3" fill="none" stroke="#f6f2ea" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f6f2ea"/></svg>
-      <span>anamnesis</span>
-    </a>
-    <nav aria-label="Main">
-      <a href="#sources">Sources</a>
-      <a href="#agents">Agents</a>
-      <a href="#computers">Computers</a>
-      <a href="#private">Privacy</a>
+    <a class="logo" href="#">anamnesis<span>.</span></a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#commands">Commands</a>
+      <a href="#">GitHub</a>
     </nav>
-    <div class="right">
-      <button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button>
-      <a class="btn btn-ink" href="#install">Install</a>
-    </div>
   </div>
 </header>
 
-<main id="top">
-
-  <section class="hero" style="padding:0" aria-labelledby="h1">
+<main>
+  <section class="hero">
     <div class="wrap">
-      <div class="rv">
-        <p class="eyebrow">anamnesis: to learn is to remember</p>
-        <h1 id="h1">Your agents already know. <em>Let them remember.</em></h1>
-        <p class="lead">One local memory under Claude Code, Codex, Gemini CLI, Cursor and your chat apps. Ask any of them, and they recall what the others learned.</p>
-        <div class="cta">
-          <a class="btn btn-paper" href="#install">Install locally</a>
-          <button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button>
+      <div>
+        <h1>One memory for all your AI tools.</h1>
+        <p class="lede">Anamnesis imports your history from Claude Code, Codex, Cursor, Gemini and ChatGPT into one local database, then lets every agent search it over MCP.</p>
+        <div class="install">
+          <code>pip install -e . &amp;&amp; anam sync</code>
+          <button class="copy" data-copy="pip install -e . && anam sync">Copy</button>
         </div>
       </div>
-      <div class="recall rv" aria-label="Example: searching your memory">
-        <div class="recall-bar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <span class="recall-q" id="rq"></span>
-        </div>
-        <div class="recall-meta"><span id="rmeta">searching 6 tools · 5,906 messages</span><span>on this Mac</span></div>
-        <ul class="hits" id="hits"></ul>
-      </div>
+<pre class="term"><span class="p">$</span> anam sync
+imported 44 conversations, 5,906 messages
+
+<span class="p">$</span> anam connect claude-code
+<span class="a">✓</span> claude-code connected
+
+<span class="p">$</span> anam search "why did we drop redis"
+<span class="a">codex</span> · api-server · Mar 4
+  Redis only held sessions; moved them to SQLite…</pre>
     </div>
   </section>
 
-  <section id="sources" aria-labelledby="h-sources">
+  <section id="how">
     <div class="wrap">
-      <div class="head-row rv">
+      <h2>How it works</h2>
+      <div class="grid">
         <div>
-          <div class="kicker"><span class="num">i.</span> It starts full</div>
-          <h2 id="h-sources">Built from the history <em>you already have.</em></h2>
+          <h3>Import</h3>
+          <p>Reads the transcripts your AI tools already keep on disk. Re-running only picks up what changed.</p>
         </div>
-        <p class="sub">No new habit. Your tools already wrote everything down. Anamnesis reads it where it lives and keeps up as you work.</p>
-      </div>
-      <div class="sources rv">
-        <div class="source"><div class="source-top"><b>Claude Code</b><span class="how live">live</span></div><p>Every session and project from <code>~/.claude</code>.</p></div>
-        <div class="source"><div class="source-top"><b>Codex CLI</b><span class="how live">live</span></div><p>Rollouts, agent work and code changes.</p></div>
-        <div class="source"><div class="source-top"><b>Gemini CLI</b><span class="how live">live</span></div><p>Checkpointed chats, replayed in order.</p></div>
-        <div class="source"><div class="source-top"><b>Cursor</b><span class="how live">live</span></div><p>Composer threads and inline chat history.</p></div>
-        <div class="source"><div class="source-top"><b>ChatGPT</b><span class="how">export</span></div><p>Your data export, the branch you kept.</p></div>
-        <div class="source"><div class="source-top"><b>claude.ai</b><span class="how">export</span></div><p>Web and desktop conversations.</p></div>
-        <div class="source"><div class="source-top"><b>Gemini</b><span class="how">export</span></div><p>Google Takeout activity, grouped into chats.</p></div>
-        <div class="source"><div class="source-top"><b>Your notes</b><span class="how live">live</span></div><p>Decisions agents save with <code>remember</code>.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="alt" aria-labelledby="h-how">
-    <div class="wrap">
-      <div class="head-row rv">
         <div>
-          <div class="kicker"><span class="num">ii.</span> How it works</div>
-          <h2 id="h-how">Three verbs. <em>That's the product.</em></h2>
+          <h3>Search</h3>
+          <p>Keyword and semantic search with local embeddings. Filter by tool or project.</p>
         </div>
-      </div>
-      <div class="steps">
-        <div class="step rv"><div class="n">Import</div><h3>Read what happened</h3><p>Transcripts from every tool on this machine land in one SQLite file. Only changed files are re-read, and nothing is stored twice.</p></div>
-        <div class="step rv"><div class="n">Recall</div><h3>Search by meaning</h3><p>Full-text and local embeddings, ranked together. Filter by tool, project or thread, from the terminal, the web UI or any agent.</p></div>
-        <div class="step rv"><div class="n">Share</div><h3>Give it to every agent</h3><p>One MCP server, registered with a single command, so each tool reads and writes the same memory.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="on-dark" id="agents" aria-labelledby="h-agents">
-    <div class="wrap row">
-      <div class="rv">
-        <div class="kicker"><span class="num">iii.</span> Every agent</div>
-        <h2 id="h-agents">Ask once. <em>Every agent knows.</em></h2>
-        <p class="sub">Agents look things up before asking you, and write down decisions as they make them. Switch tools mid-task without re-explaining a thing.</p>
-        <ul class="facts">
-          <li><code>search_memory</code>, <code>recent_conversations</code>, <code>get_conversation</code>, <code>remember</code></li>
-          <li><code>anam connect all</code> registers it everywhere and backs up every config it touches</li>
-          <li>Sessions already open see new memories within a minute</li>
-        </ul>
-      </div>
-      <div class="term rv" data-demo="agents">
-        <div class="term-head">
-          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <div class="tabs" role="tablist" aria-label="Agent">
-            <button class="on" role="tab" aria-selected="true" data-tab="0">Claude Code</button>
-            <button role="tab" aria-selected="false" data-tab="1">Cursor</button>
-            <button role="tab" aria-selected="false" data-tab="2">Codex</button>
-          </div>
-          <button class="replay" aria-label="Play again">↻ Replay</button>
-        </div>
-        <div class="term-body"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="computers" aria-labelledby="h-computers">
-    <div class="wrap row flip">
-      <div class="rv">
-        <div class="kicker"><span class="num">iv.</span> Every computer</div>
-        <h2 id="h-computers">New laptop. <em>Same memory.</em></h2>
-        <p class="sub">Pair your computers with one code. Memory travels through a folder you already sync, encrypted so the cloud can't read it.</p>
-        <ul class="facts">
-          <li>Each computer writes only its own log, so there's nothing to conflict</li>
-          <li>AES-256-GCM; the key lives in your pairing code, never in the folder</li>
-          <li>iCloud Drive by default, Dropbox or Syncthing too. No server of ours</li>
-        </ul>
-      </div>
-      <div class="term rv" data-demo="devices">
-        <div class="term-head">
-          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <div class="tabs"><span class="on">Pairing</span></div>
-          <button class="replay" aria-label="Play again">↻ Replay</button>
-        </div>
-        <div class="devs">
-          <div class="dev"><b>work-macbook</b><span>writes its own log</span><div class="segs" data-dev="a"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-          <div class="dev b"><b>home-desktop</b><span>writes its own log</span><div class="segs" data-dev="b"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-        </div>
-        <div class="term-body" style="min-height:170px"></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="alt" id="private" aria-labelledby="h-private">
-    <div class="wrap row">
-      <div class="rv">
-        <div class="kicker"><span class="num">v.</span> Yours</div>
-        <h2 id="h-private">It's just <em>a folder.</em></h2>
-        <p class="sub">A SQLite file and a vector index in your home directory. Read it, back it up, delete it.</p>
-        <ul class="facts">
-          <li>Embeddings run on your CPU. No account, no telemetry, no API key</li>
-          <li>Your own keys from <code>.env</code> are used only if you chat inside Anamnesis</li>
-          <li>Terminal UI, web UI and CLI all read the same store</li>
-        </ul>
-      </div>
-      <div class="term rv" data-demo="folder">
-        <div class="term-head">
-          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <div class="tabs"><span class="on">~/.anamnesis</span></div>
-          <button class="replay" aria-label="Play again">↻ Replay</button>
-        </div>
-        <div class="term-body"></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="on-dark" id="install" aria-labelledby="h-install">
-    <div class="wrap">
-      <div class="head-row rv" style="margin-bottom:0">
         <div>
-          <div class="kicker"><span class="num">vi.</span> Begin</div>
-          <h2 id="h-install">Stop re-explaining. <em>Start remembering.</em></h2>
+          <h3>Share</h3>
+          <p>An MCP server gives every connected agent the same memory. Optional encrypted sync between your computers.</p>
         </div>
-        <p class="sub">Python 3.11+ on macOS or Linux. Three commands, and your memory is already full.</p>
       </div>
-      <div class="install-grid">
-        <div class="inst rv"><span class="n">one</span><h3>Install</h3><p>From a clone of the repo.</p><button class="copy" data-copy="pip install -e .">pip install -e . <span class="tag">copy</span></button></div>
-        <div class="inst rv"><span class="n">two</span><h3>Import your history</h3><p>Reads every supported tool on this machine.</p><button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button></div>
-        <div class="inst rv"><span class="n">three</span><h3>Connect your agents</h3><p>Claude Code, Claude Desktop, Cursor, Gemini CLI, Codex.</p><button class="copy" data-copy="anam connect all">anam connect all <span class="tag">copy</span></button></div>
-      </div>
-      <blockquote class="quote rv">“Seeking and learning are, in fact, nothing but recollection.”<cite>Plato, Meno 81d</cite></blockquote>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Sources</h2>
+      <ul class="sources">
+        <li>Claude Code</li>
+        <li>Codex CLI</li>
+        <li>Gemini CLI</li>
+        <li>Cursor</li>
+        <li>ChatGPT <small>export</small></li>
+        <li>claude.ai <small>export</small></li>
+        <li>Gemini <small>Takeout</small></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="commands">
+    <div class="wrap">
+      <h2>Commands</h2>
+      <table>
+        <tr><td><code>anam sync</code></td><td>Import new history from local AI tools</td></tr>
+        <tr><td><code>anam import &lt;files&gt;</code></td><td>Import ChatGPT, claude.ai or Gemini exports</td></tr>
+        <tr><td><code>anam search &lt;query&gt;</code></td><td>Search memory</td></tr>
+        <tr><td><code>anam connect [tool]</code></td><td>Register the MCP server with Claude Code, Claude Desktop, Cursor, Gemini CLI or Codex. Configs are backed up first.</td></tr>
+        <tr><td><code>anam share</code> · <code>anam join</code></td><td>Sync memory across computers through iCloud or any synced folder</td></tr>
+        <tr><td><code>anam status</code></td><td>What is stored and which tools are connected</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>Privacy</h2>
+      <p class="note">Everything lives in <code>~/.anamnesis</code> on your machine. No account, no server. Sync files are encrypted before they leave your computer.</p>
     </div>
   </section>
 </main>
 
 <footer>
-  <div class="meander" aria-hidden="true"></div>
   <div class="wrap">
-    <a href="#top" class="logo" aria-label="Anamnesis home">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#b0532d"/><circle cx="16" cy="16" r="12.3" fill="none" stroke="#f6f2ea" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f6f2ea"/></svg>
-      <span>anamnesis</span>
-    </a>
-    <nav aria-label="Footer">
-      <a href="#sources">Sources</a><a href="#agents">Agents</a><a href="#computers">Computers</a><a href="#private">Privacy</a><a href="#">GitHub</a>
-    </nav>
-    <span>© 2026 Anamnesis · local-first</span>
+    <span>Anamnesis — Greek for “recollection”.</span>
+    <a href="#">GitHub</a>
   </div>
 </footer>
 
 <script>
-(() => {
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const wait = (ms) => new Promise((r) => setTimeout(r, reduce ? 0 : ms));
-
-  /* hero: a live memory search that cycles through example questions */
-  const QUERIES = [
-    {
-      q: "why did we drop redis for the rate limiter",
-      hits: [
-        ["s-cx", "codex", "12 days ago", "Moved the token bucket into <mark>Postgres</mark> advisory locks: <mark>Redis</mark> was the last stateful service."],
-        ["s-cu", "cursor", "9 days ago", "Load test on the Postgres <mark>limiter</mark>: 2k rps, p99 3.8 ms."],
-        ["s-gpt", "chatgpt", "3 weeks ago", "Trade-offs of <mark>rate limiting</mark> in the database vs. a cache."],
-      ],
-    },
-    {
-      q: "how do I run the staging migration safely",
-      hits: [
-        ["s-cc", "claude-code", "yesterday", "Add the constraint as NOT VALID, then VALIDATE in a second <mark>migration</mark>."],
-        ["s-nt", "note", "last week", "Never run alembic from CI against <mark>staging</mark>; use the runbook."],
-        ["s-gm", "gemini-cli", "2 weeks ago", "Lock timeouts explain why the <mark>migration</mark> hung on staging."],
-      ],
-    },
-    {
-      q: "what tone did we pick for onboarding emails",
-      hits: [
-        ["s-cw", "claude.ai", "last month", "Warm, second person, one idea per <mark>email</mark>, no exclamation marks."],
-        ["s-gpt", "chatgpt", "last month", "Three subject lines for the day-2 <mark>onboarding</mark> nudge."],
-        ["s-nt", "note", "3 weeks ago", "Decision: drop the founder letter from <mark>onboarding</mark>."],
-      ],
-    },
-  ];
-  const rq = document.getElementById("rq");
-  const hitsEl = document.getElementById("hits");
-  const rmeta = document.getElementById("rmeta");
-  async function heroLoop() {
-    for (let n = 0; ; n = (n + 1) % QUERIES.length) {
-      const { q, hits } = QUERIES[n];
-      hitsEl.innerHTML = "";
-      rmeta.textContent = "searching 6 tools · 5,906 messages";
-      for (let i = 1; i <= q.length; i++) {
-        rq.innerHTML = q.slice(0, i) + '<span class="caret"></span>';
-        await wait(38);
-      }
-      await wait(350);
-      rmeta.textContent = `${hits.length} memories · ${18 + n * 7} ms`;
-      for (const [cls, src, when, text] of hits) {
-        const li = document.createElement("li");
-        li.className = "hit";
-        li.innerHTML = `<div class="hit-top"><span class="src ${cls}">${src}</span><span class="when">${when}</span></div><p>${text}</p>`;
-        hitsEl.appendChild(li);
-        requestAnimationFrame(() => requestAnimationFrame(() => li.classList.add("in")));
-        await wait(260);
-      }
-      if (reduce) return;
-      await wait(3600);
-    }
-  }
-  heroLoop();
-
-  /* terminal demos: [delay before the line (ms), html] */
-  const SCRIPTS = {
-    agents: (tab) => [
-      [
-        [0, '<span class="d">~/code/checkout-api · claude</span>'],
-        [500, '<span class="k">&gt;</span> <span class="w">why did we drop redis for the rate limiter?</span>'],
-        [700, '<span class="k">●</span> anamnesis.search_memory<span class="d">("rate limiter redis")</span>'],
-        [500, '  <span class="d">⎿ 3 hits · codex 12d · cursor 9d · chatgpt 3w</span>'],
-        [700, 'You decided this in Codex on Oct 30: the token'],
-        [100, 'bucket moved into Postgres advisory locks, since'],
-        [100, 'Redis was the last stateful service. The Cursor'],
-        [100, 'load test kept p99 under 4 ms. Keep that design?'],
-      ],
-      [
-        [0, '<span class="d">composer · checkout-api</span>'],
-        [500, '<span class="k">&gt;</span> <span class="w">add the limiter to /refunds like the others</span>'],
-        [700, '<span class="k">●</span> anamnesis.recent_conversations<span class="d">(project=…)</span>'],
-        [500, '  <span class="d">⎿ claude-code 2h ago · "rate limiter design"</span>'],
-        [700, 'Using the Postgres bucket from your Claude Code'],
-        [100, 'session this morning (same 20 req/s per key).'],
-        [100, 'Edited <span class="g">refunds.py</span> +14 −2'],
-      ],
-      [
-        [0, '<span class="d">codex · checkout-api</span>'],
-        [500, '<span class="k">&gt;</span> <span class="w">ship it, and note why we chose postgres</span>'],
-        [700, '<span class="k">●</span> anamnesis.remember<span class="d">(topic="checkout-api")</span>'],
-        [500, '  <span class="d">⎿ saved to Notes: checkout-api</span>'],
-        [700, 'Saved. Claude Code, Cursor and Gemini CLI will'],
-        [100, 'find this the next time anyone asks about rate'],
-        [100, 'limiting in this repo.'],
-      ],
-    ][tab],
-    devices: () => [
-      [0, '<span class="k">work-macbook $</span> <span class="w">anam share</span>'],
-      [600, '  pairing code  <span class="g">K7QF-2MXA-…-PL4D</span>'],
-      [900, '<span class="k">home-desktop $</span> <span class="w">anam join K7QF-…</span>'],
-      [700, '  <span class="g">✓</span> joined · pulled 6 segments'],
-      [700, '  <span class="g">✓</span> searchable here <span class="d">· syncs both ways</span>'],
-    ],
-    folder: () => [
-      [0, '<span class="k">$</span> <span class="w">ls ~/.anamnesis</span>'],
-      [400, 'anamnesis.db   <span class="d">conversations + full-text</span>'],
-      [200, 'vectors/       <span class="d">local embeddings</span>'],
-      [200, 'models/        <span class="d">bge-small, runs on CPU</span>'],
-      [500, ''],
-      [100, '<span class="k">$</span> <span class="w">anam status</span>'],
-      [400, '  Claude Code        44 conversations'],
-      [150, '  Codex CLI          12 conversations'],
-      [150, '  Cursor             19 conversations'],
-      [150, '  messages (total)   <span class="g">5,906</span>'],
-    ],
-  };
-
-  const runs = new WeakMap();
-  async function play(term, tab = 0) {
-    const token = {};
-    runs.set(term, token);
-    const body = term.querySelector(".term-body");
-    const kind = term.dataset.demo;
-    const segA = [...term.querySelectorAll('[data-dev="a"] i')];
-    const segB = [...term.querySelectorAll('[data-dev="b"] i')];
-    [...segA, ...segB].forEach((s) => s.classList.remove("f"));
-    const out = [];
-    body.innerHTML = '<span class="caret-b"></span>';
-    for (const [i, [delay, html]] of SCRIPTS[kind](tab).entries()) {
-      await wait(delay);
-      if (runs.get(term) !== token) return;
-      out.push(html);
-      body.innerHTML = out.join("\n") + ' <span class="caret-b"></span>';
-      if (kind === "devices") {
-        segA.forEach((s, j) => j < 3 + i && s.classList.add("f"));
-        if (i >= 3) segB.forEach((s, j) => j < 2 + i && s.classList.add("f"));
-      }
-    }
-  }
-
-  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (!e.isIntersecting) return;
-    io.unobserve(e.target);
-    e.target.classList.add("in");
-    if (e.target.dataset.demo) play(e.target);
-  }), { threshold: 0.15 });
-  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
-
-  document.querySelectorAll(".term").forEach((term) => {
-    term.querySelector(".replay").addEventListener("click", () => {
-      const on = term.querySelector("[data-tab].on");
-      play(term, on ? +on.dataset.tab : 0);
+  document.querySelectorAll(".copy").forEach((b) => {
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
+      catch { b.textContent = "Failed"; }
+      setTimeout(() => (b.textContent = "Copy"), 1500);
     });
-    term.querySelectorAll("[data-tab]").forEach((tab) => tab.addEventListener("click", () => {
-      term.querySelectorAll("[data-tab]").forEach((t) => {
-        t.classList.toggle("on", t === tab);
-        t.setAttribute("aria-selected", String(t === tab));
-      });
-      play(term, +tab.dataset.tab);
-    }));
   });
-
-  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
-    const tag = b.querySelector(".tag");
-    if (!tag) return;
-    tag.textContent = "copied";
-    setTimeout(() => (tag.textContent = "copy"), 1400);
-  }));
-})();
 </script>
 </body>
 </html>
