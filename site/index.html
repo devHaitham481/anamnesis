@@ -7,410 +7,517 @@
 <meta name="description" content="Anamnesis turns your Claude Code, Codex, Gemini CLI, Cursor and chat history into one local memory, and gives it back to every agent over MCP.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --paper: #f4efe6;
-  --paper-2: #ebe4d8;
-  --ink: #26221e;
-  --ink-soft: #5d554c;
-  --rule: #26221e33;
-  --terracotta: #a9502c;
-  --ochre: #d9a650;
-  --olive: #56603f;
-  --term: #171513;
-  --term-line: #f4efe61f;
-  --term-text: #e9e2d6;
+  --paper: #f6f2ea;
+  --paper-2: #ede6da;
+  --ink: #221f1b;
+  --muted: #6b6258;
+  --line: #221f1b1f;
+  --terracotta: #b0532d;
+  --terracotta-2: #943f1e;
+  --ochre: #e0ad5a;
+  --on-dark: #f3ece1;
+  --on-dark-muted: #b9ad9e;
+  --line-dark: #f3ece124;
+  --term: #191714;
   --term-dim: #8f877b;
-  --term-ok: #a8c08a;
-  --term-hl: #e7a774;
+  --term-ok: #a9c28b;
+  --term-hl: #eaa978;
   --serif: "Newsreader", Georgia, serif;
-  --tw: "Courier Prime", "Courier New", monospace;
-  --code: "JetBrains Mono", ui-monospace, Menlo, monospace;
-  --rail: clamp(220px, 19vw, 290px);
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --gutter: clamp(16px, 5vw, 64px);
+  --max: 1280px;
   --ease: cubic-bezier(.2, .7, .2, 1);
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
-  font-family: var(--tw); font-size: 15px; line-height: 1.6;
+  font-family: var(--sans); font-size: 17px; line-height: 1.6;
   -webkit-font-smoothing: antialiased; overflow-x: hidden;
-}
-body::before {
-  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .35; mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .4 0 0 0 0 .33 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 a { color: inherit; }
 button { font: inherit; color: inherit; }
+code { font-family: var(--mono); font-size: .82em; }
+.wrap { width: min(var(--max), 100% - 2 * var(--gutter)); margin-inline: auto; }
 
-/* ---------- rail ---------- */
-.rail {
-  position: fixed; top: 0; left: 0; bottom: 0; width: var(--rail);
-  padding: 28px 28px 32px; display: flex; flex-direction: column; z-index: 20;
+/* ---------- nav ---------- */
+.nav {
+  position: sticky; top: 0; z-index: 50; background: #f6f2eae6; backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
-.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.logo-mark { width: 30px; height: 30px; flex: none; }
-.logo-word { font-family: var(--serif); font-size: 25px; letter-spacing: -.01em; }
-.rail nav { margin-top: auto; display: grid; gap: 4px; }
-.rail nav a { text-decoration: none; font-size: 15px; width: fit-content; padding: 1px 0; border-bottom: 1px solid transparent; transition: border-color .2s; }
-.rail nav a:hover, .rail nav a.on { border-color: var(--ink); }
-.rail .rail-cta { margin-top: 28px; display: grid; gap: 12px; justify-items: start; }
-.cmd {
-  display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; cursor: pointer;
-  font-family: var(--tw); font-size: 15px;
-}
-.cmd svg { width: 14px; height: 14px; opacity: .55; }
-.cmd:hover svg { opacity: 1; }
-.cmd .ok { font-size: 12px; }
+.nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; flex: none; }
+.logo svg { width: 28px; height: 28px; }
+.logo span { font-family: var(--serif); font-size: 23px; letter-spacing: -.01em; }
+.nav nav { display: flex; gap: 24px; font-size: 15px; color: var(--muted); }
+.nav nav a { text-decoration: none; transition: color .2s; }
+.nav nav a:hover { color: var(--ink); }
+.nav .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
 .btn {
-  display: inline-block; background: var(--ink); color: var(--paper); text-decoration: none;
-  font-family: var(--tw); font-size: 14px; padding: 9px 14px; border: 0; cursor: pointer; transition: background .2s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 18px;
+  border-radius: 999px; border: 1px solid transparent; font-weight: 500; font-size: 15px; text-decoration: none; cursor: pointer;
+  transition: background .2s, transform .2s var(--ease); white-space: nowrap;
 }
-.btn:hover { background: #000; }
-.btn.light { background: var(--paper); color: var(--ink); }
-.btn.light:hover { background: #fff; }
+.btn:hover { transform: translateY(-1px); }
+.btn-ink { background: var(--ink); color: var(--paper); }
+.btn-ink:hover { background: #000; }
+.btn-paper { background: var(--paper); color: var(--ink); }
+.btn-paper:hover { background: #fff; }
+.copy {
+  display: inline-flex; align-items: center; gap: 10px; height: 42px; padding: 0 6px 0 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; font-family: var(--mono); font-size: 13.5px; cursor: pointer;
+  transition: border-color .2s; white-space: nowrap;
+}
+.copy:hover { border-color: currentColor; }
+.copy .tag { font-family: var(--sans); font-size: 12px; padding: 5px 10px; border-radius: 999px; background: #221f1b10; }
+.hero .copy, .on-dark .copy { border-color: var(--line-dark); }
+.hero .copy .tag, .on-dark .copy .tag { background: #f3ece11a; }
 
-/* ---------- main ---------- */
-main { margin-left: var(--rail); overflow-x: clip; }
-.sheet {
-  position: relative; width: min(100%, 980px); color: var(--ink);
-  display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr); container-type: inline-size;
+/* ---------- hero ---------- */
+.hero { background: var(--terracotta); color: var(--on-dark); position: relative; overflow: hidden; }
+.hero::after {
+  content: "ἀνάμνησις"; position: absolute; right: -2vw; bottom: -6vw; font-family: var(--serif); font-style: italic;
+  font-size: clamp(120px, 22vw, 360px); line-height: 1; color: #00000014; pointer-events: none; white-space: nowrap;
 }
-.sheet .margin { border-right: 1px solid var(--ink-soft); position: relative; }
-.sheet .margin .note {
-  position: absolute; top: 46px; right: 12px; writing-mode: vertical-rl; transform: rotate(180deg);
-  font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+.hero .wrap {
+  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+  gap: clamp(32px, 5vw, 80px); align-items: center; padding-block: clamp(56px, 9vw, 120px);
 }
-.sheet .body { padding: 44px 40px 40px; display: flex; flex-direction: column; min-width: 0; }
-.sheet .body.split { border-right: 1px solid var(--ink-soft); }
-.sheet .tick { position: absolute; right: 0; width: 14px; border-top: 1px solid currentColor; opacity: .5; }
+.eyebrow { font-family: var(--serif); font-style: italic; font-size: 19px; color: #f3ece1cc; margin: 0 0 18px; }
+h1 {
+  font-family: var(--serif); font-weight: 400; font-size: clamp(42px, 6vw, 84px); line-height: 1; letter-spacing: -.025em;
+  margin: 0 0 24px; text-wrap: balance;
+}
+h1 em { font-style: italic; color: #ffd9b8; }
+.hero .lead { font-size: clamp(17px, 1.6vw, 20px); color: #f3ece1d9; max-width: 34em; margin: 0 0 32px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
-/* hero */
-.hero { background: var(--terracotta); color: var(--paper); min-height: 520px; }
-.hero .margin, .hero .body.split { border-color: #f4efe68c; }
-.hero .margin .note { color: #f4efe6b3; }
-.hero h1 {
-  font-family: var(--serif); font-weight: 400; font-size: clamp(44px, 6.6cqi, 78px); line-height: .98;
-  letter-spacing: -.02em; margin: 0;
+/* search demo */
+.recall {
+  background: var(--paper); color: var(--ink); border-radius: 18px; padding: 10px; min-width: 0;
+  box-shadow: 0 40px 80px -30px #3a150699, 0 0 0 1px #00000014;
 }
-.hero .greek { font-family: var(--serif); font-style: italic; font-size: 20px; opacity: .85; margin-top: 18px; }
-.hero .right { padding: 44px 40px 40px; display: flex; flex-direction: column; justify-content: flex-end; gap: 22px; }
-.hero .right p { margin: 0; font-size: 16px; max-width: 34ch; }
-.hero .cmd { color: var(--paper); }
+.recall-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 11px; background: #fff; border: 1px solid var(--line); font-size: 16px; min-height: 50px; }
+.recall-bar svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.recall-q { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recall-q .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--terracotta); vertical-align: -3px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+.recall-meta { font-size: 12px; color: var(--muted); padding: 10px 6px 6px; display: flex; justify-content: space-between; gap: 10px; }
+.hits { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-height: 252px; align-content: start; }
+.hit {
+  padding: 12px 14px; border-radius: 11px; background: #fff; border: 1px solid var(--line);
+  opacity: 0; transform: translateY(8px); transition: opacity .45s var(--ease), transform .45s var(--ease);
+}
+.hit.in { opacity: 1; transform: none; }
+.hit-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.hit-top .when { margin-left: auto; }
+.hit p { margin: 0; font-size: 14.5px; line-height: 1.45; }
+.hit mark { background: #b0532d1f; color: var(--terracotta-2); padding: 0 2px; border-radius: 3px; }
+.src { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500; white-space: nowrap; }
+.s-cc, .s-cw { background: #f0d6c4; color: #8a3d18; }
+.s-cx { background: #e3ded5; color: #3b3630; }
+.s-gm { background: #d6e2ef; color: #2c4f75; }
+.s-cu { background: #e5dbef; color: #5b3c80; }
+.s-gpt { background: #d6eadd; color: #2c6243; }
+.s-nt { background: #f3e5bf; color: #7a5a12; }
 
-/* ornament band (greek key) */
-.band {
-  height: 120px; width: min(100%, 980px); position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
-}
-.band .key {
-  position: absolute; left: 52px; right: 0; top: 50%; height: 28px; transform: translateY(-50%); opacity: .45;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M0 27H28M0 1H28M3 27V6H22V22H9V11H17V17' fill='none' stroke='%2326221e' stroke-width='1.5'/%3E%3C/svg%3E");
-  background-repeat: repeat-x; background-size: 28px 28px;
-}
-.band .quote {
-  position: relative; background: var(--paper); padding: 6px 14px; font-family: var(--serif); font-style: italic;
-  font-size: 19px; color: var(--ink-soft);
-}
+/* ---------- sections ---------- */
+section { padding-block: clamp(72px, 10vw, 136px); }
+.on-dark { background: var(--ink); color: var(--on-dark); }
+.alt { background: var(--paper-2); }
+.kicker { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; letter-spacing: .02em; color: var(--terracotta); margin-bottom: 18px; }
+.on-dark .kicker { color: var(--ochre); }
+.kicker .num { font-family: var(--serif); font-style: italic; font-size: 20px; font-weight: 400; }
+h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 4.4vw, 58px); line-height: 1.04; letter-spacing: -.02em; margin: 0 0 18px; text-wrap: balance; }
+h2 em { font-style: italic; color: var(--terracotta); }
+.on-dark h2 em { color: var(--ochre); }
+.sub { color: var(--muted); font-size: clamp(17px, 1.5vw, 19px); max-width: 36em; margin: 0; }
+.on-dark .sub { color: var(--on-dark-muted); }
+.head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px 48px; flex-wrap: wrap; margin-bottom: clamp(36px, 5vw, 64px); }
+.head-row > div { max-width: 40rem; }
+.head-row .sub { max-width: 28rem; }
 
-/* feature sheets */
-.feat { background: var(--paper-2); }
-.feat h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 4.8cqi, 50px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 16px; }
-.feat .lede { margin: 0; max-width: 36ch; }
-.points { list-style: none; padding: 0; margin: 48px 0 0; }
-.points li { display: block; padding: 11px 0 11px 27px; position: relative; border-top: 1px solid var(--rule); font-family: var(--serif); font-size: 17px; line-height: 1.4; }
-.points li:first-child { border-top: 0; }
-.points li::before { content: "✳"; position: absolute; left: 0; top: 12px; font-size: 13px; color: var(--terracotta); }
-.points code, .lede code { font-family: var(--code); font-size: 13px; background: #26221e12; padding: 1px 5px; }
-.feat .demo-col { position: relative; min-width: 0; }
+/* sources */
+.sources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.source { padding: 22px 22px 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; transition: background .25s; }
+.source:hover { background: #ffffff80; }
+.source-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.source b { font-weight: 600; font-size: 17px; }
+.source p { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+.how { font-size: 11.5px; font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+.how.live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4f8a5b; margin-right: 6px; vertical-align: 1px; }
 
-/* ---------- terminal demo ---------- */
+/* steps */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 40px); }
+.step { border-top: 2px solid var(--ink); padding-top: 20px; }
+.step .n { font-family: var(--serif); font-style: italic; font-size: 30px; color: var(--terracotta); line-height: 1; }
+.step h3 { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 14px 0 8px; letter-spacing: -.01em; }
+.step p { margin: 0; color: var(--muted); font-size: 16px; }
+
+/* feature rows */
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 96px); align-items: center; }
+.row.flip > :first-child { order: 2; }
+.facts { list-style: none; padding: 0; margin: 32px 0 0; }
+.facts li { padding: 14px 0 14px 32px; border-top: 1px solid var(--line); position: relative; font-size: 16.5px; }
+.on-dark .facts li { border-color: var(--line-dark); }
+.facts li::before { content: "◆"; position: absolute; left: 4px; top: 15px; font-size: 10px; color: var(--terracotta); }
+.on-dark .facts li::before { color: var(--ochre); }
+.facts code { background: #221f1b10; padding: 2px 6px; border-radius: 5px; }
+.on-dark .facts code { background: #f3ece11a; }
+
+/* terminal */
 .term {
-  position: relative; background: var(--term); color: var(--term-text); font-family: var(--code); font-size: 12.5px; line-height: 1.7;
-  margin: 46px -96px 0 0; box-shadow: 0 30px 60px -20px #26221e66; min-height: 300px;
-  display: flex; flex-direction: column;
+  background: var(--term); color: #ebe4d8; border-radius: 14px; overflow: hidden; min-width: 0;
+  font-family: var(--mono); font-size: 13px; line-height: 1.7; box-shadow: 0 40px 80px -40px #221f1b99, 0 0 0 1px #ffffff12;
 }
-.term-head { display: flex; align-items: stretch; border-bottom: 1px solid var(--term-line); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--term-dim); }
-.term-head .t { padding: 10px 14px; border: 0; border-right: 1px solid var(--term-line); background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
-.term-head button.t { cursor: pointer; }
-.term-head button.t:hover { color: var(--term-text); }
-.term-head .t.on { color: var(--term-text); box-shadow: inset 0 -2px 0 var(--term-hl); }
-.term-head .sp { flex: 1; }
-.term-head .replay { padding: 0 14px; background: none; border: 0; border-left: 1px solid var(--term-line); color: var(--term-dim); cursor: pointer; font-size: 14px; }
-.term-head .replay:hover { color: var(--term-text); }
-.term-body { padding: 14px 16px 18px; white-space: pre-wrap; flex: 1; min-height: 260px; }
+.term-head { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 14px; border-bottom: 1px solid #ffffff14; }
+.dots { display: flex; gap: 6px; margin-right: 10px; flex: none; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: #ffffff26; display: block; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.tabs button, .tabs span {
+  border: 0; background: none; color: var(--term-dim); font-family: var(--sans); font-size: 13px; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.tabs span { cursor: default; }
+.tabs button:hover { color: #fff; }
+.tabs .on { background: #ffffff14; color: #fff; }
+.replay { margin-left: auto; flex: none; border: 0; background: none; color: var(--term-dim); cursor: pointer; font-family: var(--sans); font-size: 13px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+.replay:hover { color: #fff; background: #ffffff10; }
+.term-body { padding: 16px 18px 20px; white-space: pre; overflow-x: auto; min-height: 290px; }
 .term-body .d { color: var(--term-dim); }
 .term-body .k { color: var(--term-hl); }
 .term-body .g { color: var(--term-ok); }
 .term-body .w { color: #fff; }
-.caret { display: inline-block; width: 7px; height: 14px; background: var(--term-text); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
-.bar { display: inline-block; height: 8px; width: 0; background: var(--term-ok); vertical-align: 1px; transition: width 1.2s var(--ease); }
-.corner { position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-right: 1px solid var(--term-dim); border-bottom: 1px solid var(--term-dim); }
-
-.devs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 0; }
-.dev { border: 1px solid var(--term-line); padding: 10px 12px; font-size: 12px; }
-.dev b { font-weight: 500; color: #fff; display: block; }
-.dev span { color: var(--term-dim); font-size: 11px; }
+.caret-b { display: inline-block; width: 7px; height: 14px; background: #ebe4d8; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+.devs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 18px 4px; font-family: var(--sans); }
+.dev { border: 1px solid #ffffff1a; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.dev b { font-weight: 600; color: #fff; display: block; }
+.dev span { color: var(--term-dim); font-size: 12px; }
 .dev .segs { display: flex; gap: 3px; margin-top: 8px; }
-.dev .segs i { flex: 1; height: 6px; background: #f4efe626; transition: background .3s; }
+.dev .segs i { flex: 1; height: 6px; border-radius: 2px; background: #ffffff1f; transition: background .3s; }
 .dev .segs i.f { background: var(--term-ok); }
 .dev.b .segs i.f { background: var(--term-hl); }
-.vault { margin: 10px 16px 0; border: 1px dashed #e7a77466; padding: 8px 12px; font-size: 11.5px; color: var(--term-dim); text-align: center; }
 
-/* final + footer sheet */
-.end { background: var(--ink); color: var(--paper); }
-.end .margin, .end .body.split { border-color: #f4efe659; }
-.end .margin .note { color: #f4efe680; }
-.end h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(38px, 5.6cqi, 64px); line-height: 1; letter-spacing: -.02em; margin: 0 0 28px; }
-.end h2 em { color: var(--ochre); }
-.end .points li { border-color: #f4efe62e; }
-.end .points li::before { color: var(--ochre); }
-.end .points code { background: #f4efe61a; }
-.end .row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 28px; }
-.end .cmd { color: var(--paper); }
-.foot { padding: 44px 40px 40px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; }
-.foot p { margin: 0; color: #f4efe6b3; max-width: 34ch; }
-.foot .links { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; text-transform: uppercase; letter-spacing: .1em; font-size: 11.5px; }
-.foot .links a { text-decoration: none; color: #f4efe6cc; }
-.foot .links a:hover { color: var(--paper); }
-.foot .legal { margin-top: auto; display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; color: #f4efe680; }
-.spacer { height: 120px; }
+/* install */
+.install-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: clamp(36px, 5vw, 56px); }
+.inst { border: 1px solid var(--line-dark); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.inst .n { font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ochre); }
+.inst h3 { margin: 0; font-weight: 600; font-size: 18px; }
+.inst p { margin: 0 0 8px; color: var(--on-dark-muted); font-size: 15px; flex: 1; }
+.inst .copy { width: 100%; justify-content: space-between; }
+.quote { margin: clamp(56px, 8vw, 96px) 0 0; font-family: var(--serif); font-style: italic; font-size: clamp(24px, 3vw, 36px); line-height: 1.25; max-width: 24em; }
+.quote cite { display: block; font-style: normal; font-family: var(--sans); font-size: 14px; color: var(--on-dark-muted); margin-top: 12px; }
+
+/* footer */
+footer { background: var(--ink); color: var(--on-dark-muted); font-size: 14.5px; }
+.meander {
+  height: 22px; opacity: .3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M0 21H22M0 1H22M2.5 21V4.5H17.5V17.5H7V9H13V13' fill='none' stroke='%23f3ece1' stroke-width='1.3'/%3E%3C/svg%3E");
+  background-size: 22px 22px; background-repeat: repeat-x;
+}
+footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; padding-block: 36px 44px; }
+footer .logo span { color: var(--on-dark); }
+footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+footer nav a { text-decoration: none; }
+footer nav a:hover { color: var(--on-dark); }
 
 /* reveal */
-.rv { opacity: 0; transform: translateX(28px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+.rv { opacity: 0; transform: translateY(20px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
 .rv.in { opacity: 1; transform: none; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .rv { opacity: 1; transform: none; transition: none; }
-  .caret { animation: none; }
-  .bar { transition: none; }
+  .rv, .hit { opacity: 1; transform: none; transition: none; }
+  .caret, .caret-b { animation: none; }
 }
 
-/* ---------- smaller screens ---------- */
-@media (max-width: 1180px) { .term { margin-right: -40px; } }
-@media (max-width: 960px) {
-  .rail {
-    position: sticky; top: 0; bottom: auto; width: auto; flex-direction: row; align-items: center;
-    justify-content: space-between; padding: 12px 16px; background: var(--paper); border-bottom: 1px solid var(--rule);
-  }
-  .rail nav, .rail .rail-cta .cmd { display: none; }
-  .rail .rail-cta { margin: 0; }
-  .logo-word { font-size: 22px; }
-  main { margin-left: 0; padding: 16px; }
-  .sheet { grid-template-columns: 28px minmax(0, 1fr); width: 100%; }
-  .sheet .margin { grid-row: span 2; }
-  .sheet .margin .note { display: none; }
-  .sheet .body, .hero .right, .foot { padding: 30px 20px 26px; }
-  .sheet .body.split { border-right: 0; }
-  .hero .right, .feat .demo-col, .foot { grid-column: 2; }
-  .hero .right { padding-top: 0; }
-  .hero { min-height: 0; }
-  .term { margin: 0 0 22px; min-height: 0; }
-  .feat .demo-col { padding: 0 12px; }
-  .points { margin-top: 28px; }
-  .band { height: 72px; width: 100%; }
-  .band .key { left: 0; }
-  .band .quote { font-size: 15px; }
-  .spacer { height: 32px; }
-  .term-body { min-height: 0; font-size: 11px; white-space: pre; overflow-x: auto; }
-  .term-head .t { padding: 9px 10px; }
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .nav nav { display: none; }
+  .sources { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .hero .wrap, .row { grid-template-columns: minmax(0, 1fr); }
+  .row.flip > :first-child { order: 0; }
+  .steps, .install-grid { grid-template-columns: minmax(0, 1fr); }
+  .hits { min-height: 0; }
+  .term-body { min-height: 0; }
+}
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .nav .copy { display: none; }
+  .nav .wrap { height: 58px; }
+  .source { padding: 16px 14px 18px; }
+  .source-top { flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 6px; }
+  .source b { font-size: 15.5px; }
+  .source p { font-size: 13.5px; }
+  .cta .btn, .cta .copy { width: 100%; }
+  .cta .copy { justify-content: space-between; }
+  .term-body { font-size: 11.5px; padding: 14px; }
+  .devs { grid-template-columns: 1fr; }
+  .recall-meta span:last-child { display: none; }
+  .hit-top .when { display: none; }
+  footer .wrap { flex-direction: column; align-items: flex-start; }
 }
 </style>
 </head>
 <body>
 
-<aside class="rail" aria-label="Site">
-  <a href="#top" class="logo" aria-label="Anamnesis home">
-    <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="15" fill="#a9502c"/>
-      <circle cx="16" cy="16" r="12.4" fill="none" stroke="#f4efe6" stroke-width=".8" stroke-dasharray="1.6 2"/>
-      <path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f4efe6"/>
-    </svg>
-    <span class="logo-word">anamnesis</span>
-  </a>
-  <nav aria-label="Main">
-    <a href="#intro" class="on">Product</a>
-    <a href="#history">History</a>
-    <a href="#agents">Agents</a>
-    <a href="#computers">Computers</a>
-    <a href="#install">Install</a>
-  </nav>
-  <div class="rail-cta">
-    <button class="cmd" data-copy="anam sync">anam sync <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
-    <a class="btn" href="#install">Install locally</a>
+<header class="nav">
+  <div class="wrap">
+    <a href="#top" class="logo" aria-label="Anamnesis home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#b0532d"/><circle cx="16" cy="16" r="12.3" fill="none" stroke="#f6f2ea" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f6f2ea"/></svg>
+      <span>anamnesis</span>
+    </a>
+    <nav aria-label="Main">
+      <a href="#sources">Sources</a>
+      <a href="#agents">Agents</a>
+      <a href="#computers">Computers</a>
+      <a href="#private">Privacy</a>
+    </nav>
+    <div class="right">
+      <button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button>
+      <a class="btn btn-ink" href="#install">Install</a>
+    </div>
   </div>
-</aside>
+</header>
 
 <main id="top">
 
-  <section class="sheet hero rv" id="intro" aria-labelledby="h-hero">
-    <div class="margin"><span class="note">I · Recollection</span></div>
-    <div class="body split">
-      <h1 id="h-hero">Your Agents Already Know. Let Them Remember.</h1>
-      <div class="greek">ἀνάμνησις: to learn is to remember.</div>
-    </div>
-    <div class="right">
-      <p>One local memory under Claude Code, Codex, Gemini CLI, Cursor and your chat apps. Every agent sees what the others learned.</p>
-      <a class="btn light" href="#install" style="width:fit-content">Install locally</a>
-      <button class="cmd" data-copy="anam sync">anam sync <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
-    </div>
-    <span class="tick" style="top:56px"></span><span class="tick" style="top:50%"></span><span class="tick" style="bottom:40px"></span>
-  </section>
-
-  <div class="band" aria-hidden="true"><span class="key"></span><span class="quote">“the soul has learned all things.” · Meno 81c</span></div>
-
-  <section class="sheet feat rv" id="history" aria-labelledby="h-history">
-    <div class="margin"><span class="note">II · History</span></div>
-    <div class="body split">
-      <h2 id="h-history">It Starts Full.</h2>
-      <p class="lede">No new habit to build. Your tools already wrote everything down.</p>
-      <ul class="points">
-        <li>Reads Claude Code, Codex, Gemini CLI and Cursor right where they keep their transcripts.</li>
-        <li>Imports ChatGPT, claude.ai and Gemini web from their data exports.</li>
-        <li>Incremental: only changed files are re-read, and nothing is stored twice.</li>
-      </ul>
-    </div>
-    <div class="demo-col">
-      <div class="term" data-demo="sync">
-        <div class="term-head"><span class="t on">Sync</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
-        <div class="term-body"></div>
-        <span class="corner"></span>
+  <section class="hero" style="padding:0" aria-labelledby="h1">
+    <div class="wrap">
+      <div class="rv">
+        <p class="eyebrow">anamnesis: to learn is to remember</p>
+        <h1 id="h1">Your agents already know. <em>Let them remember.</em></h1>
+        <p class="lead">One local memory under Claude Code, Codex, Gemini CLI, Cursor and your chat apps. Ask any of them, and they recall what the others learned.</p>
+        <div class="cta">
+          <a class="btn btn-paper" href="#install">Install locally</a>
+          <button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button>
+        </div>
+      </div>
+      <div class="recall rv" aria-label="Example: searching your memory">
+        <div class="recall-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="recall-q" id="rq"></span>
+        </div>
+        <div class="recall-meta"><span id="rmeta">searching 6 tools · 5,906 messages</span><span>on this Mac</span></div>
+        <ul class="hits" id="hits"></ul>
       </div>
     </div>
-    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <div class="band" aria-hidden="true"><span class="key"></span></div>
-
-  <section class="sheet feat rv" id="agents" aria-labelledby="h-agents">
-    <div class="margin"><span class="note">III · Agents</span></div>
-    <div class="body split">
-      <h2 id="h-agents">Ask Once. Every Agent Knows.</h2>
-      <p class="lede">An MCP server gives each tool the same memory. Agents look things up before asking you, and write down decisions as they go.</p>
-      <ul class="points">
-        <li><code>search_memory</code> <code>recent_conversations</code> <code>get_conversation</code> <code>remember</code></li>
-        <li><code>anam connect all</code> registers it everywhere, backing up every config it touches.</li>
-        <li>Sessions that are already open see new memories within a minute.</li>
-      </ul>
+  <section id="sources" aria-labelledby="h-sources">
+    <div class="wrap">
+      <div class="head-row rv">
+        <div>
+          <div class="kicker"><span class="num">i.</span> It starts full</div>
+          <h2 id="h-sources">Built from the history <em>you already have.</em></h2>
+        </div>
+        <p class="sub">No new habit. Your tools already wrote everything down. Anamnesis reads it where it lives and keeps up as you work.</p>
+      </div>
+      <div class="sources rv">
+        <div class="source"><div class="source-top"><b>Claude Code</b><span class="how live">live</span></div><p>Every session and project from <code>~/.claude</code>.</p></div>
+        <div class="source"><div class="source-top"><b>Codex CLI</b><span class="how live">live</span></div><p>Rollouts, agent work and code changes.</p></div>
+        <div class="source"><div class="source-top"><b>Gemini CLI</b><span class="how live">live</span></div><p>Checkpointed chats, replayed in order.</p></div>
+        <div class="source"><div class="source-top"><b>Cursor</b><span class="how live">live</span></div><p>Composer threads and inline chat history.</p></div>
+        <div class="source"><div class="source-top"><b>ChatGPT</b><span class="how">export</span></div><p>Your data export, the branch you kept.</p></div>
+        <div class="source"><div class="source-top"><b>claude.ai</b><span class="how">export</span></div><p>Web and desktop conversations.</p></div>
+        <div class="source"><div class="source-top"><b>Gemini</b><span class="how">export</span></div><p>Google Takeout activity, grouped into chats.</p></div>
+        <div class="source"><div class="source-top"><b>Your notes</b><span class="how live">live</span></div><p>Decisions agents save with <code>remember</code>.</p></div>
+      </div>
     </div>
-    <div class="demo-col">
-      <div class="term" data-demo="agents">
-        <div class="term-head" role="tablist" aria-label="Agent">
-          <button class="t on" role="tab" aria-selected="true" data-tab="0">Claude Code</button>
-          <button class="t" role="tab" aria-selected="false" data-tab="1">Cursor</button>
-          <button class="t" role="tab" aria-selected="false" data-tab="2">Codex</button>
-          <span class="sp"></span><button class="replay" aria-label="Play again">↻</button>
+  </section>
+
+  <section class="alt" aria-labelledby="h-how">
+    <div class="wrap">
+      <div class="head-row rv">
+        <div>
+          <div class="kicker"><span class="num">ii.</span> How it works</div>
+          <h2 id="h-how">Three verbs. <em>That's the product.</em></h2>
+        </div>
+      </div>
+      <div class="steps">
+        <div class="step rv"><div class="n">Import</div><h3>Read what happened</h3><p>Transcripts from every tool on this machine land in one SQLite file. Only changed files are re-read, and nothing is stored twice.</p></div>
+        <div class="step rv"><div class="n">Recall</div><h3>Search by meaning</h3><p>Full-text and local embeddings, ranked together. Filter by tool, project or thread, from the terminal, the web UI or any agent.</p></div>
+        <div class="step rv"><div class="n">Share</div><h3>Give it to every agent</h3><p>One MCP server, registered with a single command, so each tool reads and writes the same memory.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="on-dark" id="agents" aria-labelledby="h-agents">
+    <div class="wrap row">
+      <div class="rv">
+        <div class="kicker"><span class="num">iii.</span> Every agent</div>
+        <h2 id="h-agents">Ask once. <em>Every agent knows.</em></h2>
+        <p class="sub">Agents look things up before asking you, and write down decisions as they make them. Switch tools mid-task without re-explaining a thing.</p>
+        <ul class="facts">
+          <li><code>search_memory</code>, <code>recent_conversations</code>, <code>get_conversation</code>, <code>remember</code></li>
+          <li><code>anam connect all</code> registers it everywhere and backs up every config it touches</li>
+          <li>Sessions already open see new memories within a minute</li>
+        </ul>
+      </div>
+      <div class="term rv" data-demo="agents">
+        <div class="term-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="tabs" role="tablist" aria-label="Agent">
+            <button class="on" role="tab" aria-selected="true" data-tab="0">Claude Code</button>
+            <button role="tab" aria-selected="false" data-tab="1">Cursor</button>
+            <button role="tab" aria-selected="false" data-tab="2">Codex</button>
+          </div>
+          <button class="replay" aria-label="Play again">↻ Replay</button>
         </div>
         <div class="term-body"></div>
-        <span class="corner"></span>
       </div>
     </div>
-    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <div class="band" aria-hidden="true"><span class="key"></span><span class="quote">“not learning, but recollection.”</span></div>
-
-  <section class="sheet feat rv" id="computers" aria-labelledby="h-computers">
-    <div class="margin"><span class="note">IV · Computers</span></div>
-    <div class="body split">
-      <h2 id="h-computers">New Laptop. Same Memory.</h2>
-      <p class="lede">Pair your computers with one code. Memory travels through a folder you already sync, encrypted so the cloud can't read it.</p>
-      <ul class="points">
-        <li>Each computer writes only its own log, so there's nothing to conflict.</li>
-        <li>AES-256-GCM. The key lives in your pairing code, never in the folder.</li>
-        <li>iCloud Drive by default, Dropbox or Syncthing too. No server of ours.</li>
-      </ul>
-    </div>
-    <div class="demo-col">
-      <div class="term" data-demo="devices">
-        <div class="term-head"><span class="t on">Devices</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
+  <section id="computers" aria-labelledby="h-computers">
+    <div class="wrap row flip">
+      <div class="rv">
+        <div class="kicker"><span class="num">iv.</span> Every computer</div>
+        <h2 id="h-computers">New laptop. <em>Same memory.</em></h2>
+        <p class="sub">Pair your computers with one code. Memory travels through a folder you already sync, encrypted so the cloud can't read it.</p>
+        <ul class="facts">
+          <li>Each computer writes only its own log, so there's nothing to conflict</li>
+          <li>AES-256-GCM; the key lives in your pairing code, never in the folder</li>
+          <li>iCloud Drive by default, Dropbox or Syncthing too. No server of ours</li>
+        </ul>
+      </div>
+      <div class="term rv" data-demo="devices">
+        <div class="term-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="tabs"><span class="on">Pairing</span></div>
+          <button class="replay" aria-label="Play again">↻ Replay</button>
+        </div>
         <div class="devs">
           <div class="dev"><b>work-macbook</b><span>writes its own log</span><div class="segs" data-dev="a"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
           <div class="dev b"><b>home-desktop</b><span>writes its own log</span><div class="segs" data-dev="b"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
         </div>
-        <div class="vault">iCloud Drive/Anamnesis · encrypted segments only</div>
-        <div class="term-body" style="min-height:150px"></div>
-        <span class="corner"></span>
+        <div class="term-body" style="min-height:170px"></div>
       </div>
     </div>
-    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <div class="band" aria-hidden="true"><span class="key"></span></div>
-
-  <section class="sheet feat rv" id="yours" aria-labelledby="h-private">
-    <div class="margin"><span class="note">V · Yours</span></div>
-    <div class="body split">
-      <h2 id="h-private">It's Just a Folder.</h2>
-      <p class="lede">A SQLite file and a vector index in your home directory. Read it, back it up, delete it.</p>
-      <ul class="points">
-        <li>Embeddings run on your CPU. No account, no telemetry, no API key needed.</li>
-        <li>Your own keys from <code>.env</code> are used only if you chat inside Anamnesis.</li>
-        <li>Terminal UI, web UI and CLI all read the same store.</li>
-      </ul>
-    </div>
-    <div class="demo-col">
-      <div class="term" data-demo="folder">
-        <div class="term-head"><span class="t on">~/.anamnesis</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
+  <section class="alt" id="private" aria-labelledby="h-private">
+    <div class="wrap row">
+      <div class="rv">
+        <div class="kicker"><span class="num">v.</span> Yours</div>
+        <h2 id="h-private">It's just <em>a folder.</em></h2>
+        <p class="sub">A SQLite file and a vector index in your home directory. Read it, back it up, delete it.</p>
+        <ul class="facts">
+          <li>Embeddings run on your CPU. No account, no telemetry, no API key</li>
+          <li>Your own keys from <code>.env</code> are used only if you chat inside Anamnesis</li>
+          <li>Terminal UI, web UI and CLI all read the same store</li>
+        </ul>
+      </div>
+      <div class="term rv" data-demo="folder">
+        <div class="term-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="tabs"><span class="on">~/.anamnesis</span></div>
+          <button class="replay" aria-label="Play again">↻ Replay</button>
+        </div>
         <div class="term-body"></div>
-        <span class="corner"></span>
       </div>
     </div>
-    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <div class="band" aria-hidden="true"><span class="key"></span></div>
-
-  <section class="sheet end rv" id="install" aria-labelledby="h-end">
-    <div class="margin"><span class="note">VI · Begin</span></div>
-    <div class="body split">
-      <h2 id="h-end">Stop Re-explaining. <em>Start Remembering.</em></h2>
-      <ul class="points" style="margin-top:0">
-        <li><code>pip install -e .</code> in a clone of the repo</li>
-        <li><code>anam sync</code> imports what's on this machine</li>
-        <li><code>anam connect all</code> gives every agent the memory</li>
-      </ul>
-      <div class="row">
-        <button class="btn light" data-copy="anam sync && anam connect all">Copy setup commands</button>
-        <button class="cmd" data-copy="anam share">anam share <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
+  <section class="on-dark" id="install" aria-labelledby="h-install">
+    <div class="wrap">
+      <div class="head-row rv" style="margin-bottom:0">
+        <div>
+          <div class="kicker"><span class="num">vi.</span> Begin</div>
+          <h2 id="h-install">Stop re-explaining. <em>Start remembering.</em></h2>
+        </div>
+        <p class="sub">Python 3.11+ on macOS or Linux. Three commands, and your memory is already full.</p>
       </div>
+      <div class="install-grid">
+        <div class="inst rv"><span class="n">one</span><h3>Install</h3><p>From a clone of the repo.</p><button class="copy" data-copy="pip install -e .">pip install -e . <span class="tag">copy</span></button></div>
+        <div class="inst rv"><span class="n">two</span><h3>Import your history</h3><p>Reads every supported tool on this machine.</p><button class="copy" data-copy="anam sync">anam sync <span class="tag">copy</span></button></div>
+        <div class="inst rv"><span class="n">three</span><h3>Connect your agents</h3><p>Claude Code, Claude Desktop, Cursor, Gemini CLI, Codex.</p><button class="copy" data-copy="anam connect all">anam connect all <span class="tag">copy</span></button></div>
+      </div>
+      <blockquote class="quote rv">“Seeking and learning are, in fact, nothing but recollection.”<cite>Plato, Meno 81d</cite></blockquote>
     </div>
-    <footer class="foot">
-      <a href="#top" class="logo">
-        <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#a9502c"/><circle cx="16" cy="16" r="12.4" fill="none" stroke="#f4efe6" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f4efe6"/></svg>
-        <span class="logo-word">anamnesis</span>
-      </a>
-      <p>Local-first memory for people who talk to a lot of AIs. Python 3.11+ on macOS and Linux.</p>
-      <nav class="links" aria-label="Footer">
-        <a href="#history">History</a><a href="#agents">Agents</a>
-        <a href="#computers">Computers</a><a href="#yours">Privacy</a>
-        <a href="#">GitHub</a><a href="#">Changelog</a>
-      </nav>
-      <div class="legal"><span>© 2026 Anamnesis</span><span>Local-first</span></div>
-    </footer>
-    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
-  <div class="spacer"></div>
 </main>
+
+<footer>
+  <div class="meander" aria-hidden="true"></div>
+  <div class="wrap">
+    <a href="#top" class="logo" aria-label="Anamnesis home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#b0532d"/><circle cx="16" cy="16" r="12.3" fill="none" stroke="#f6f2ea" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f6f2ea"/></svg>
+      <span>anamnesis</span>
+    </a>
+    <nav aria-label="Footer">
+      <a href="#sources">Sources</a><a href="#agents">Agents</a><a href="#computers">Computers</a><a href="#private">Privacy</a><a href="#">GitHub</a>
+    </nav>
+    <span>© 2026 Anamnesis · local-first</span>
+  </div>
+</footer>
 
 <script>
 (() => {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = (ms) => new Promise((r) => setTimeout(r, reduce ? 0 : ms));
 
-  // Each line: [delay before it appears (ms), html]. A caret trails the last line.
+  /* hero: a live memory search that cycles through example questions */
+  const QUERIES = [
+    {
+      q: "why did we drop redis for the rate limiter",
+      hits: [
+        ["s-cx", "codex", "12 days ago", "Moved the token bucket into <mark>Postgres</mark> advisory locks: <mark>Redis</mark> was the last stateful service."],
+        ["s-cu", "cursor", "9 days ago", "Load test on the Postgres <mark>limiter</mark>: 2k rps, p99 3.8 ms."],
+        ["s-gpt", "chatgpt", "3 weeks ago", "Trade-offs of <mark>rate limiting</mark> in the database vs. a cache."],
+      ],
+    },
+    {
+      q: "how do I run the staging migration safely",
+      hits: [
+        ["s-cc", "claude-code", "yesterday", "Add the constraint as NOT VALID, then VALIDATE in a second <mark>migration</mark>."],
+        ["s-nt", "note", "last week", "Never run alembic from CI against <mark>staging</mark>; use the runbook."],
+        ["s-gm", "gemini-cli", "2 weeks ago", "Lock timeouts explain why the <mark>migration</mark> hung on staging."],
+      ],
+    },
+    {
+      q: "what tone did we pick for onboarding emails",
+      hits: [
+        ["s-cw", "claude.ai", "last month", "Warm, second person, one idea per <mark>email</mark>, no exclamation marks."],
+        ["s-gpt", "chatgpt", "last month", "Three subject lines for the day-2 <mark>onboarding</mark> nudge."],
+        ["s-nt", "note", "3 weeks ago", "Decision: drop the founder letter from <mark>onboarding</mark>."],
+      ],
+    },
+  ];
+  const rq = document.getElementById("rq");
+  const hitsEl = document.getElementById("hits");
+  const rmeta = document.getElementById("rmeta");
+  async function heroLoop() {
+    for (let n = 0; ; n = (n + 1) % QUERIES.length) {
+      const { q, hits } = QUERIES[n];
+      hitsEl.innerHTML = "";
+      rmeta.textContent = "searching 6 tools · 5,906 messages";
+      for (let i = 1; i <= q.length; i++) {
+        rq.innerHTML = q.slice(0, i) + '<span class="caret"></span>';
+        await wait(38);
+      }
+      await wait(350);
+      rmeta.textContent = `${hits.length} memories · ${18 + n * 7} ms`;
+      for (const [cls, src, when, text] of hits) {
+        const li = document.createElement("li");
+        li.className = "hit";
+        li.innerHTML = `<div class="hit-top"><span class="src ${cls}">${src}</span><span class="when">${when}</span></div><p>${text}</p>`;
+        hitsEl.appendChild(li);
+        requestAnimationFrame(() => requestAnimationFrame(() => li.classList.add("in")));
+        await wait(260);
+      }
+      if (reduce) return;
+      await wait(3600);
+    }
+  }
+  heroLoop();
+
+  /* terminal demos: [delay before the line (ms), html] */
   const SCRIPTS = {
-    sync: () => [
-      [0, '<span class="k">$</span> <span class="w">anam sync</span>'],
-      [500, '<span class="d">scanning this machine…</span>'],
-      [500, '  claude-code   <span class="g">44 sessions</span>   ~/.claude/projects'],
-      [300, '  codex         <span class="g">12 sessions</span>   ~/.codex/sessions'],
-      [300, '  gemini-cli    <span class="g"> 7 sessions</span>   ~/.gemini/tmp'],
-      [300, '  cursor        <span class="g">19 chats</span>      state.vscdb'],
-      [500, ''],
-      [100, 'embedding  <span class="bar" data-grow="120px"></span> <span class="d">5,906 msgs</span>'],
-      [1500, '<span class="g">✓</span> memory ready  <span class="d">· next run reads only changes</span>'],
-    ],
     agents: (tab) => [
       [
         [0, '<span class="d">~/code/checkout-api · claude</span>'],
@@ -468,19 +575,16 @@ main { margin-left: var(--rail); overflow-x: clip; }
     runs.set(term, token);
     const body = term.querySelector(".term-body");
     const kind = term.dataset.demo;
-    const lines = SCRIPTS[kind](tab);
     const segA = [...term.querySelectorAll('[data-dev="a"] i')];
     const segB = [...term.querySelectorAll('[data-dev="b"] i')];
     [...segA, ...segB].forEach((s) => s.classList.remove("f"));
     const out = [];
-    body.innerHTML = '<span class="caret"></span>';
-    for (const [i, [delay, html]] of lines.entries()) {
-      if (!reduce) await new Promise((r) => setTimeout(r, delay));
+    body.innerHTML = '<span class="caret-b"></span>';
+    for (const [i, [delay, html]] of SCRIPTS[kind](tab).entries()) {
+      await wait(delay);
       if (runs.get(term) !== token) return;
       out.push(html);
-      body.innerHTML = out.join("\n") + ' <span class="caret"></span>';
-      const bar = body.querySelector(".bar[data-grow]");
-      if (bar) requestAnimationFrame(() => requestAnimationFrame(() => (bar.style.width = bar.dataset.grow)));
+      body.innerHTML = out.join("\n") + ' <span class="caret-b"></span>';
       if (kind === "devices") {
         segA.forEach((s, j) => j < 3 + i && s.classList.add("f"));
         if (i >= 3) segB.forEach((s, j) => j < 2 + i && s.classList.add("f"));
@@ -491,10 +595,10 @@ main { margin-left: var(--rail); overflow-x: clip; }
   const io = new IntersectionObserver((entries) => entries.forEach((e) => {
     if (!e.isIntersecting) return;
     io.unobserve(e.target);
-    if (e.target.classList.contains("rv")) e.target.classList.add("in");
+    e.target.classList.add("in");
     if (e.target.dataset.demo) play(e.target);
-  }), { threshold: 0.2 });
-  document.querySelectorAll(".rv, .term[data-demo]").forEach((el) => io.observe(el));
+  }), { threshold: 0.15 });
+  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
 
   document.querySelectorAll(".term").forEach((term) => {
     term.querySelector(".replay").addEventListener("click", () => {
@@ -511,24 +615,12 @@ main { margin-left: var(--rail); overflow-x: clip; }
   });
 
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(b.dataset.copy);
-    } catch {
-      return; // clipboard blocked: the command is visible on the button
-    }
-    const ok = b.querySelector(".ok");
-    if (ok) { ok.hidden = false; setTimeout(() => (ok.hidden = true), 1400); return; }
-    const label = b.textContent;
-    b.textContent = "Copied";
-    setTimeout(() => (b.textContent = label), 1400);
+    try { await navigator.clipboard.writeText(b.dataset.copy); } catch { return; }
+    const tag = b.querySelector(".tag");
+    if (!tag) return;
+    tag.textContent = "copied";
+    setTimeout(() => (tag.textContent = "copy"), 1400);
   }));
-
-  const links = [...document.querySelectorAll(".rail nav a")];
-  const spy = new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (!e.isIntersecting) return;
-    links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
-  }), { rootMargin: "-45% 0px -50% 0px" });
-  ["intro", "history", "agents", "computers", "install"].forEach((id) => spy.observe(document.getElementById(id)));
 })();
 </script>
 </body>
