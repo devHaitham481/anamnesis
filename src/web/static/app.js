@@ -1,16 +1,16 @@
-// NexusAI web client: threads, live chat over WebSocket, search, model switching.
+// Anamnesis web client: threads, live chat over WebSocket, search, model switching.
 (function () {
   "use strict";
 
   const $ = (sel) => document.querySelector(sel);
-  const md = window.NexusMarkdown;
+  const md = window.AnamnesisMarkdown;
 
-  // Optional auth token (NEXUS_AUTH_TOKEN): taken from ?token=… once, then remembered.
+  // Optional auth token (ANAMNESIS_AUTH_TOKEN): taken from ?token=… once, then remembered.
   const params = new URLSearchParams(location.search);
   let token = params.get("token");
   try {
-    if (token) localStorage.setItem("nexus-token", token);
-    else token = localStorage.getItem("nexus-token");
+    if (token) localStorage.setItem("anamnesis-token", token);
+    else token = localStorage.getItem("anamnesis-token");
   } catch (_) { /* storage unavailable */ }
   if (params.has("token")) history.replaceState(null, "", location.pathname + location.hash);
 
@@ -85,7 +85,7 @@
     }
     const current = state.threads.find((t) => t.id === state.threadId);
     $("#thread-title").textContent = current ? current.title : "New chat";
-    document.title = current ? current.title + " · NexusAI" : "NexusAI";
+    document.title = current ? current.title + " · Anamnesis" : "Anamnesis";
   }
 
   function renderModels() {
@@ -154,7 +154,7 @@
   }
 
   function addNote(text, kind) {
-    const el = bubble(kind || "note", kind === "error" ? "Error" : "NexusAI");
+    const el = bubble(kind || "note", kind === "error" ? "Error" : "Anamnesis");
     el.querySelector(".msg-body").textContent = text;
     $("#messages").appendChild(el);
     scrollToBottom(true);
@@ -503,7 +503,7 @@
       if (wanted && state.threads.some((t) => t.id === wanted)) await openThread(wanted);
       else if (state.threads.length) await openThread(state.threads[0].id);
     } catch (e) {
-      updateBanner("Could not reach the NexusAI server: " + e.message);
+      updateBanner("Could not reach the Anamnesis server: " + e.message);
     }
     connect();
   }

@@ -1,16 +1,16 @@
 """Cross-device memory sync through a folder you already sync (iCloud Drive, Dropbox, ...).
 
-Layout inside the folder (`<folder>/nexus-memory/`):
+Layout inside the folder (`<folder>/anamnesis-memory/`):
 
     meta.json                     format version + key check (no secrets)
-    <device-id>/device.json       device name (plain) for `nexus devices`
+    <device-id>/device.json       device name (plain) for `anam devices`
     <device-id>/000001.nxs ...    immutable, end-to-end encrypted segments
 
 Every device only ever writes its own subfolder, so file-sync services never see write
 conflicts. Each device reads every other device's segments in order and imports them with the
 same idempotent upsert used for local history, so merging is just "import what's new".
 Segments are AES-256-GCM encrypted with a key that never touches the folder: it travels only
-in the pairing code shown by `nexus share` and typed into `nexus join`.
+in the pairing code shown by `anam share` and typed into `anam join`.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ log = logging.getLogger(__name__)
 
 FORMAT = 1
 MAGIC = b"NXS1"
-ROOT = "nexus-memory"
+ROOT = "anamnesis-memory"
 SEGMENT_MESSAGES = 1000
-_KEY_CHECK = b"nexus-memory-sync-v1"
+_KEY_CHECK = b"anamnesis-memory-sync-v1"
 
 
 class SyncSetupError(RuntimeError):
@@ -52,7 +52,7 @@ class SyncSetupError(RuntimeError):
 
 def default_folder() -> Path:
     icloud = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
-    return (icloud if icloud.is_dir() else Path.home()) / "NexusAI"
+    return (icloud if icloud.is_dir() else Path.home()) / "Anamnesis"
 
 
 # ---------- identity & config (stored in the local data dir, never in the shared folder) ----
@@ -149,7 +149,7 @@ def _read_meta(root: Path) -> dict[str, Any] | None:
 def share(data_dir: Path, folder: Path) -> str:
     """Turn on sync for this device in `folder`; returns the pairing code for other devices.
 
-    The first device creates the key. If the folder already holds NexusAI memory from another
+    The first device creates the key. If the folder already holds Anamnesis memory from another
     device, use `join` with that device's code instead.
     """
     existing = load_config(data_dir)
@@ -159,8 +159,8 @@ def share(data_dir: Path, folder: Path) -> str:
         return encode_code(existing.key)
     if meta is not None:
         raise SyncSetupError(
-            f"{root} already holds NexusAI memory from another device. "
-            "Run `nexus share` there to see its code, then `nexus join <code>` here."
+            f"{root} already holds Anamnesis memory from another device. "
+            "Run `anam share` there to see its code, then `anam join <code>` here."
         )
     key = secrets.token_bytes(32)
     root.mkdir(parents=True, exist_ok=True)
@@ -176,7 +176,7 @@ def join(data_dir: Path, folder: Path, code: str) -> None:
     meta = _read_meta(root)
     if meta is None:
         raise SyncSetupError(
-            f"No NexusAI memory found in {root}. Wait for the folder to finish syncing, or check "
+            f"No Anamnesis memory found in {root}. Wait for the folder to finish syncing, or check "
             "that you chose the same folder as on your other device."
         )
     if not hmac.compare_digest(str(meta.get("check", "")), _key_check(key)):
@@ -234,7 +234,7 @@ def encrypt(key: bytes, device_id: str, records: list[dict[str, Any]]) -> bytes:
 
 def decrypt(key: bytes, device_id: str, blob: bytes) -> list[dict[str, Any]]:
     if not blob.startswith(MAGIC):
-        raise ValueError("not a NexusAI segment")
+        raise ValueError("not a Anamnesis segment")
     nonce, ct = blob[4:16], blob[16:]
     try:
         body = AESGCM(key).decrypt(nonce, ct, device_id.encode())
@@ -363,7 +363,7 @@ async def _import_device(
             return added_total, f"{path.name}: {e}"
         for rec in records:
             if rec.get("type") != "conversation":
-                continue  # newer record kinds from a newer NexusAI: ignore, don't fail
+                continue  # newer record kinds from a newer Anamnesis: ignore, don't fail
             conv = ImportedConversation(
                 source=rec["source"],
                 external_id=rec["external_id"],

@@ -1,4 +1,4 @@
-"""NexusAI Textual TUI: thread sidebar, streaming chat canvas, model switching, slash commands.
+"""Anamnesis Textual TUI: thread sidebar, streaming chat canvas, model switching, slash commands.
 
 All data access goes through `ChatService`; this module only handles presentation and input.
 """
@@ -34,8 +34,8 @@ EMPTY_HINT = (
 )
 
 
-class NexusApp(App[None]):
-    TITLE = "NexusAI"
+class AnamnesisApp(App[None]):
+    TITLE = "Anamnesis"
     CSS_PATH = "app.tcss"
     BINDINGS = [
         Binding("ctrl+n", "new_thread", "New thread"),
@@ -119,7 +119,7 @@ class NexusApp(App[None]):
             self._show_empty()
         prompt = self.query_one("#prompt", Input)
         prompt.disabled = False
-        prompt.placeholder = "Message NexusAI…  (/help for commands)"
+        prompt.placeholder = "Message Anamnesis…  (/help for commands)"
         prompt.focus()
         self.set_interval(self.settings.sync_interval, self._poll)
         if self.settings.memory_sync:
@@ -146,7 +146,7 @@ class NexusApp(App[None]):
             per = ", ".join(f"{SOURCE_LABELS.get(k, k)}: {v}" for k, v in report.by_source.items())
             await self._note(f"Imported {report.messages_added} new messages ({per}).")
         else:
-            await self._note("Memory is up to date (or another NexusAI process is syncing).")
+            await self._note("Memory is up to date (or another Anamnesis process is syncing).")
         if self.is_running:
             await self._refresh_threads()
 
@@ -185,7 +185,7 @@ class NexusApp(App[None]):
         await self._mount(MessageView.from_message(msg))
 
     async def _note(self, markdown: str, kind: str = "note") -> None:
-        await self._mount(MessageView(kind, "NexusAI" if kind == "note" else "Error", markdown))
+        await self._mount(MessageView(kind, "Anamnesis" if kind == "note" else "Error", markdown))
 
     # ---------- threads ----------
 

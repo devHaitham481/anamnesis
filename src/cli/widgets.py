@@ -11,7 +11,7 @@ from src.core.models import Message, Thread
 
 # Short sidebar badges showing which tool a conversation came from.
 SOURCE_TAGS = {
-    "nexus": "NX",
+    "anamnesis": "AN",
     "note": "NB",
     "claude-code": "CC",
     "codex": "CX",

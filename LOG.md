@@ -94,3 +94,8 @@ An independent review agent audited the codebase; all findings fixed with regres
   - An end-to-end CLI run with two data dirs: share, then join, then search on the second computer.
   - Tests: 126 passed (3 runs).
 - **Not yet:** deletions don't propagate across devices, and there is no hosted relay (the segment format is designed so one can be added without changes).
+
+## 2026-11-11 — Renamed to Anamnesis; new landing page
+- NexusAI is now **Anamnesis** (Plato: learning is recollection). CLI `anam` (`anam-web`, `anam-mcp`), package `anamnesis`, MCP server `anamnesis`, data in `~/.anamnesis`.
+- Backward compatible: `~/.nexus-ai` (and `nexus.db`) is moved on first run; `NEXUS_*` env vars still work as fallbacks; native chats stored with source `nexus` are relabelled `anamnesis`.
+- `site/index.html` rebuilt after a REA capture of exe.dev: left rail, paper sheets, serif + typewriter type, live terminal demos with replay/tabs, Greek-key bands and a terracotta/black-figure palette.

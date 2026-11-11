@@ -181,7 +181,7 @@ def create_app(
             await asyncio.gather(*app.state.chat_tasks, return_exceptions=True)
             await service.close()
 
-    app = FastAPI(title="NexusAI", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Anamnesis", version="0.1.0", lifespan=lifespan)
     app.state.chat_tasks = set()
     token = settings.auth_token.get_secret_value() if settings.auth_token else None
     hosts = allowed_hosts or [*DEFAULT_ALLOWED_HOSTS, *settings.allowed_hosts]

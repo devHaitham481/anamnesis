@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from textual.widgets import Input
 
-from src.cli.app import NexusApp
+from src.cli.app import AnamnesisApp
 from src.config import Settings
 from src.core.chat import INTERRUPTED_NOTE, ChatService, Delta, ThreadBusyError
 from src.core.db import Database, ThreadNotFoundError
@@ -128,7 +128,7 @@ async def test_tui_quit_mid_stream(service: ChatService) -> None:
     llm = SlowLLM()
     llm.gate = asyncio.Event()
     svc = slow_service(service, llm)
-    app = NexusApp(service.settings, svc)
+    app = AnamnesisApp(service.settings, svc)
     async with app.run_test(size=(100, 30)) as pilot:
         for _ in range(100):
             if not app.query_one("#prompt", Input).disabled:

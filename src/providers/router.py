@@ -1,4 +1,4 @@
-"""Unified provider gateway. Every model request in NexusAI goes through `ProviderRouter`."""
+"""Unified provider gateway. Every model request in Anamnesis goes through `ProviderRouter`."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def to_provider_error(exc: Exception, provider: str, model: str) -> ProviderErro
     elif isinstance(exc, NotFoundError) or status == 404:
         msg = (
             f"{label} model {model!r} is not available: {detail} "
-            "(set a different model in .env, e.g. NEXUS_GEMINI_MODEL / NEXUS_CLAUDE_MODEL)"
+            "(set a different model in .env, e.g. ANAMNESIS_GEMINI_MODEL / ANAMNESIS_CLAUDE_MODEL)"
         )
     elif isinstance(exc, APIConnectionError):
         msg = f"Could not reach {label}: {detail}"

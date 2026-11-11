@@ -43,7 +43,7 @@ async def make_service(root: Path, name: str) -> ChatService:
 async def laptops(tmp_path: Path) -> AsyncIterator[tuple[ChatService, ChatService, Path]]:
     a = await make_service(tmp_path, "laptop-a")
     b = await make_service(tmp_path, "laptop-b")
-    folder = tmp_path / "iCloud" / "NexusAI"
+    folder = tmp_path / "iCloud" / "Anamnesis"
     yield a, b, folder
     await a.close()
     await b.close()
@@ -75,7 +75,7 @@ def pair(a: ChatService, b: ChatService, folder: Path) -> str:
 
 async def test_pairing_rules(laptops: tuple[ChatService, ChatService, Path]) -> None:
     a, b, folder = laptops
-    with pytest.raises(SyncSetupError, match="No NexusAI memory"):
+    with pytest.raises(SyncSetupError, match="No Anamnesis memory"):
         join(b.settings.data_dir, folder, "A" * 52)
     code = share(a.settings.data_dir, folder)
     assert share(a.settings.data_dir, folder) == code  # idempotent on the same device
@@ -113,15 +113,15 @@ async def test_memory_flows_both_ways_without_echo_or_duplicates(
     got = await exchange(b)
     assert got.imported == 4 and sum(got.from_devices.values()) == 4
     counts = await b.source_counts()
-    assert counts == {"claude-code": 1, "nexus": 1, "note": 1}
+    assert counts == {"claude-code": 1, "anamnesis": 1, "note": 1}
     assert [h.content for h in await b.search("rotate api keys", k=1)] == [
         "how do we rotate the api keys"
     ]
     assert (await exchange(b)).imported == 0  # idempotent
     assert (await exchange(b)).exported == 0  # received memory is never echoed back
 
-    # B continues the same NexusAI chat and adds to the same note topic.
-    b_chat = next(t for t in await b.list_threads() if t.source == "nexus")
+    # B continues the same Anamnesis chat and adds to the same note topic.
+    b_chat = next(t for t in await b.list_threads() if t.source == "anamnesis")
     await b.db.add_message(b_chat.id, "assistant", "noted: fridays it is")
     await b.remember("Deploys only via CI.", topic="Preferences")
     assert (await exchange(b)).exported == 2
@@ -129,7 +129,7 @@ async def test_memory_flows_both_ways_without_echo_or_duplicates(
     back = await exchange(a)
     assert back.imported == 2
     # merged into the SAME threads on A, not duplicated
-    assert await a.source_counts() == {"claude-code": 1, "nexus": 1, "note": 1}
+    assert await a.source_counts() == {"claude-code": 1, "anamnesis": 1, "note": 1}
     assert [m.content for m in await a.messages(chat.id)] == [
         "remember we ship on fridays",
         "noted: fridays it is",
@@ -173,8 +173,8 @@ async def test_waits_for_missing_segments_and_survives_bad_files(
     await exchange(a)
     await a.import_conversation(session("s2", "segment two content"))
     await exchange(a)
-    seg1 = folder / "nexus-memory" / a_id / "000001.nxs"
-    seg2 = folder / "nexus-memory" / a_id / "000002.nxs"
+    seg1 = folder / "anamnesis-memory" / a_id / "000001.nxs"
+    seg2 = folder / "anamnesis-memory" / a_id / "000002.nxs"
     assert b"segment one" not in seg1.read_bytes()  # encrypted at rest
     hidden = seg1.with_name("held-back")
     seg1.rename(hidden)  # e.g. iCloud hasn't delivered file 1 yet

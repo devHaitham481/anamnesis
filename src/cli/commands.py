@@ -9,13 +9,13 @@ COMMANDS: dict[str, str] = {
     "new": "/new [title] — start a new thread",
     "model": "/model [name] — show or switch the model (claude, gemini)",
     "history": "/history [source] — recent conversations, optionally from one tool "
-    "(claude-code, codex, gemini-cli, cursor, chatgpt, claude-web, gemini-web, nexus)",
+    "(claude-code, codex, gemini-cli, cursor, chatgpt, claude-web, gemini-web, anamnesis)",
     "search": "/search <query> — search all past messages (open a result with /open N)",
     "open": "/open N — open item N from the last /history or /search listing",
     "rename": "/rename <title> — rename the current thread",
     "delete": "/delete — delete the current thread (run twice to confirm)",
     "sync": "/sync — import new history from your other AI tools now",
-    "quit": "Exit NexusAI",
+    "quit": "Exit Anamnesis",
 }
 _REQUIRES_ARG = {"search", "open", "rename"}
 

@@ -11,7 +11,7 @@ from src.core.models import ImportedConversation
 
 
 class Source(Protocol):
-    """A tool whose local history NexusAI can watch (Claude Code, Codex, Gemini CLI, ...)."""
+    """A tool whose local history Anamnesis can watch (Claude Code, Codex, Gemini CLI, ...)."""
 
     name: str
 

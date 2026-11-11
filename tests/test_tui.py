@@ -4,7 +4,7 @@ import asyncio
 
 from textual.widgets import Input, ListView, Select
 
-from src.cli.app import NexusApp
+from src.cli.app import AnamnesisApp
 from src.cli.widgets import MessageView, ThreadItem
 from src.core.chat import ChatService
 from tests.conftest import FakeLLM
@@ -18,26 +18,26 @@ async def wait_until(pilot, cond, limit: float = 5.0) -> None:  # type: ignore[n
         await pilot.pause(0.05)
 
 
-def views(app: NexusApp) -> list[MessageView]:
+def views(app: AnamnesisApp) -> list[MessageView]:
     return list(app.query(MessageView))
 
 
-async def submit(pilot, app: NexusApp, text: str) -> None:  # type: ignore[no-untyped-def]
+async def submit(pilot, app: AnamnesisApp, text: str) -> None:  # type: ignore[no-untyped-def]
     prompt = app.query_one("#prompt", Input)
     prompt.value = text
     await pilot.press("enter")
 
 
 async def test_chat_flow_streams_and_persists(service: ChatService, fake_llm: FakeLLM) -> None:
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        await submit(pilot, app, "Hello there NexusAI")
+        await submit(pilot, app, "Hello there Anamnesis")
         await wait_until(pilot, lambda: len(views(app)) == 2 and app._streaming is None)
-        assert views(app)[0].content == "Hello there NexusAI"
+        assert views(app)[0].content == "Hello there Anamnesis"
         assert views(app)[1].content == fake_llm.reply
         await wait_until(pilot, lambda: views(app)[1].rendered == fake_llm.reply)
-        assert views(app)[0].rendered == "Hello there NexusAI"
+        assert views(app)[0].rendered == "Hello there Anamnesis"
         assert app.thread_id is not None
         msgs = await service.messages(app.thread_id)
         assert [m.role for m in msgs] == ["user", "assistant"]
@@ -45,7 +45,7 @@ async def test_chat_flow_streams_and_persists(service: ChatService, fake_llm: Fa
             pilot,
             lambda: (
                 [i.has_class("current") for i in app.query(ThreadItem)] == [True]
-                and app.sub_title == "Hello there NexusAI"
+                and app.sub_title == "Hello there Anamnesis"
             ),
         )
 
@@ -54,7 +54,7 @@ async def test_long_stream_renders_progressively(service: ChatService, fake_llm:
     fake_llm.reply = (
         "## Title\n\n" + " ".join(f"word{i}" for i in range(300)) + "\n\n```py\nx = 1\n```"
     )
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
         await submit(pilot, app, "write a lot")
@@ -64,7 +64,7 @@ async def test_long_stream_renders_progressively(service: ChatService, fake_llm:
 
 
 async def test_model_toggle_and_command(service: ChatService, fake_llm: FakeLLM) -> None:
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
         assert app.model == "claude"
@@ -86,7 +86,7 @@ async def test_history_search_open_rename_delete(service: ChatService) -> None:
     await service.db.add_message(a.id, "user", "kubernetes cluster sizing")
     b = await service.new_thread(title="Beta thread")
     await service.db.add_message(b.id, "user", "pasta recipe")
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: app.thread_id == b.id)  # most recent opened
         await submit(pilot, app, "/history")
@@ -111,7 +111,7 @@ async def test_history_search_open_rename_delete(service: ChatService) -> None:
 async def test_sidebar_selection_and_new_thread(service: ChatService) -> None:
     a = await service.new_thread(title="First")
     await service.new_thread(title="Second")
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: app.thread_id is not None)
         lv = app.query_one("#threads", ListView)
@@ -126,7 +126,7 @@ async def test_sidebar_selection_and_new_thread(service: ChatService) -> None:
 
 async def test_live_sync_from_other_client(service: ChatService) -> None:
     t = await service.new_thread(title="Shared")
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: app.thread_id == t.id)
         # Simulate the web UI writing to the same database.
@@ -147,7 +147,7 @@ async def test_missing_key_blocks_send(service: ChatService, fake_llm: FakeLLM) 
 
     s = service.settings.model_copy(update={"anthropic_api_key": None})
     svc = ChatService(service.db, ProviderRouter(s, completion_fn=fake_llm), None, s)
-    app = NexusApp(s, svc)
+    app = AnamnesisApp(s, svc)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
         await submit(pilot, app, "hello")
@@ -159,7 +159,7 @@ async def test_missing_key_blocks_send(service: ChatService, fake_llm: FakeLLM) 
 
 async def test_provider_error_is_shown(service: ChatService, fake_llm: FakeLLM) -> None:
     fake_llm.fail = RuntimeError("rate limited")
-    app = NexusApp(service.settings, service)
+    app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
         await submit(pilot, app, "hello")
@@ -168,9 +168,9 @@ async def test_provider_error_is_shown(service: ChatService, fake_llm: FakeLLM) 
 
 
 async def test_app_creates_and_closes_its_own_service(settings, fake_llm) -> None:  # type: ignore[no-untyped-def]
-    """The production path: NexusApp builds ChatService from settings (RAG off -> no model DL)."""
+    """Production path: AnamnesisApp builds ChatService from settings (RAG off -> no model DL)."""
     s = settings.model_copy(update={"rag_enabled": False})
-    app = NexusApp(s)
+    app = AnamnesisApp(s)
     async with app.run_test(size=(100, 30)) as pilot:
         await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
         assert app.service is not None and app.service.index is None

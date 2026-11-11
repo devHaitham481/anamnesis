@@ -3,683 +3,533 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NexusAI — one memory under every AI you use</title>
-<meta name="description" content="NexusAI turns your Claude Code, Codex, Gemini CLI, Cursor and chat history into one local, searchable memory, and hands it back to every agent over MCP.">
+<title>Anamnesis — memory for your agents</title>
+<meta name="description" content="Anamnesis turns your Claude Code, Codex, Gemini CLI, Cursor and chat history into one local memory, and gives it back to every agent over MCP.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #09090b;
-  --bg-alt: #0d0d10;
-  --surface: #121216;
-  --surface-hi: #18181d;
-  --border: #f4f4f514;
-  --border-hi: #f4f4f526;
-  --text: #f4f4f5;
-  --muted: #9a9aa3;
-  --faint: #66666f;
-  --accent: #5eead4;
-  --accent-2: #a3e635;
-  --accent-ink: #042f2e;
-  --danger: #fb7185;
-  --radius-sm: 8px;
-  --radius: 16px;
-  --radius-lg: 28px;
-  --ease: cubic-bezier(.2, 0, 0, 1);
-  --max: 1200px;
-  --gutter: clamp(16px, 4vw, 48px);
-  --h1: clamp(40px, 6.2vw, 76px);
-  --h2: clamp(30px, 3.6vw, 48px);
-  --lead: clamp(17px, 1.5vw, 20px);
-  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --paper: #f4efe6;
+  --paper-2: #ebe4d8;
+  --ink: #26221e;
+  --ink-soft: #5d554c;
+  --rule: #26221e33;
+  --terracotta: #a9502c;
+  --ochre: #d9a650;
+  --olive: #56603f;
+  --term: #171513;
+  --term-line: #f4efe61f;
+  --term-text: #e9e2d6;
+  --term-dim: #8f877b;
+  --term-ok: #a8c08a;
+  --term-hl: #e7a774;
+  --serif: "Newsreader", Georgia, serif;
+  --tw: "Courier Prime", "Courier New", monospace;
+  --code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --rail: clamp(220px, 19vw, 290px);
+  --ease: cubic-bezier(.2, .7, .2, 1);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--tw); font-size: 15px; line-height: 1.6;
   -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
-a { color: inherit; text-decoration: none; }
-code, pre, .mono { font-family: var(--mono); }
-.wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .35; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .4 0 0 0 0 .33 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+a { color: inherit; }
+button { font: inherit; color: inherit; }
 
-/* dot grid */
-.dots {
-  background-image: radial-gradient(#ffffff12 1px, transparent 1px);
-  background-size: 22px 22px;
+/* ---------- rail ---------- */
+.rail {
+  position: fixed; top: 0; left: 0; bottom: 0; width: var(--rail);
+  padding: 28px 28px 32px; display: flex; flex-direction: column; z-index: 20;
 }
-
-/* nav */
-.nav {
-  position: sticky; top: 14px; z-index: 50;
-  margin: 14px auto 0; max-width: var(--max); padding: 0 var(--gutter);
+.logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; flex: none; }
+.logo-word { font-family: var(--serif); font-size: 25px; letter-spacing: -.01em; }
+.rail nav { margin-top: auto; display: grid; gap: 4px; }
+.rail nav a { text-decoration: none; font-size: 15px; width: fit-content; padding: 1px 0; border-bottom: 1px solid transparent; transition: border-color .2s; }
+.rail nav a:hover, .rail nav a.on { border-color: var(--ink); }
+.rail .rail-cta { margin-top: 28px; display: grid; gap: 12px; justify-items: start; }
+.cmd {
+  display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--tw); font-size: 15px;
 }
-.nav-inner {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px 10px 16px; border: 1px solid var(--border);
-  border-radius: 18px; background: #0b0b0ecc; backdrop-filter: blur(14px);
-}
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
-.logo {
-  width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
-  background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
-}
-.nav-links { display: flex; align-items: center; gap: 6px; }
-.nav-links a { color: var(--muted); font-size: 14px; padding: 8px 12px; border-radius: 10px; transition: color .2s var(--ease), background .2s var(--ease); }
-.nav-links a:hover { color: var(--text); background: var(--surface); }
-.nav-links .btn-sm { color: var(--text); border: 1px solid var(--border-hi); }
-
-/* buttons */
+.cmd svg { width: 14px; height: 14px; opacity: .55; }
+.cmd:hover svg { opacity: 1; }
+.cmd .ok { font-size: 12px; }
 .btn {
-  display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px;
-  border-radius: 10px; font-weight: 500; font-size: 16px; border: 1px solid var(--border-hi);
-  transition: transform .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease);
-  cursor: pointer; background: transparent; color: var(--text); font-family: inherit;
+  display: inline-block; background: var(--ink); color: var(--paper); text-decoration: none;
+  font-family: var(--tw); font-size: 14px; padding: 9px 14px; border: 0; cursor: pointer; transition: background .2s;
 }
-.btn:hover { transform: translateY(-1px); border-color: #f4f4f540; }
-.btn-primary { background: var(--text); color: #0a0a0c; border-color: var(--text); }
-.btn-primary:hover { background: #fff; }
-.btn svg { width: 18px; height: 18px; }
+.btn:hover { background: #000; }
+.btn.light { background: var(--paper); color: var(--ink); }
+.btn.light:hover { background: #fff; }
+
+/* ---------- main ---------- */
+main { margin-left: var(--rail); overflow-x: clip; }
+.sheet {
+  position: relative; width: min(100%, 980px); color: var(--ink);
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr); container-type: inline-size;
+}
+.sheet .margin { border-right: 1px solid var(--ink-soft); position: relative; }
+.sheet .margin .note {
+  position: absolute; top: 46px; right: 12px; writing-mode: vertical-rl; transform: rotate(180deg);
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+}
+.sheet .body { padding: 44px 40px 40px; display: flex; flex-direction: column; min-width: 0; }
+.sheet .body.split { border-right: 1px solid var(--ink-soft); }
+.sheet .tick { position: absolute; right: 0; width: 14px; border-top: 1px solid currentColor; opacity: .5; }
 
 /* hero */
-.hero { padding-top: clamp(56px, 9vw, 120px); }
-.eyebrow {
-  display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px;
-  letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
-  border: 1px solid var(--border); border-radius: 100px; padding: 6px 12px 6px 8px; background: var(--surface);
+.hero { background: var(--terracotta); color: var(--paper); min-height: 520px; }
+.hero .margin, .hero .body.split { border-color: #f4efe68c; }
+.hero .margin .note { color: #f4efe6b3; }
+.hero h1 {
+  font-family: var(--serif); font-weight: 400; font-size: clamp(44px, 6.6cqi, 78px); line-height: .98;
+  letter-spacing: -.02em; margin: 0;
 }
-.eyebrow .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 #5eead480; animation: pulse 2.4s var(--ease) infinite; }
-h1 {
-  font-size: var(--h1); line-height: 1.02; letter-spacing: -.035em; font-weight: 500;
-  margin: 22px 0 22px; max-width: 14ch;
+.hero .greek { font-family: var(--serif); font-style: italic; font-size: 20px; opacity: .85; margin-top: 18px; }
+.hero .right { padding: 44px 40px 40px; display: flex; flex-direction: column; justify-content: flex-end; gap: 22px; }
+.hero .right p { margin: 0; font-size: 16px; max-width: 34ch; }
+.hero .cmd { color: var(--paper); }
+
+/* ornament band (greek key) */
+.band {
+  height: 120px; width: min(100%, 980px); position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
 }
-h1 strong, h2 strong { font-weight: 700; }
-.grad { background: linear-gradient(100deg, var(--accent) 10%, var(--accent-2) 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.lead { font-size: var(--lead); color: var(--muted); max-width: 60ch; margin: 0 0 34px; font-weight: 300; }
-.lead strong { color: var(--text); font-weight: 500; }
-.cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.install {
-  display: inline-flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px 0 18px;
-  border: 1px solid var(--border-hi); border-radius: 10px; background: var(--surface); font-family: var(--mono); font-size: 14px;
+.band .key {
+  position: absolute; left: 52px; right: 0; top: 50%; height: 28px; transform: translateY(-50%); opacity: .45;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M0 27H28M0 1H28M3 27V6H22V22H9V11H17V17' fill='none' stroke='%2326221e' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size: 28px 28px;
 }
-.install .prompt { color: var(--accent); }
-.copy {
-  border: 0; background: var(--surface-hi); color: var(--muted); border-radius: 7px; height: 32px; padding: 0 10px;
-  font-family: var(--mono); font-size: 12px; cursor: pointer; transition: color .2s var(--ease);
+.band .quote {
+  position: relative; background: var(--paper); padding: 6px 14px; font-family: var(--serif); font-style: italic;
+  font-size: 19px; color: var(--ink-soft);
 }
-.copy:hover { color: var(--text); }
 
-/* hero stage */
-.stage {
-  margin-top: clamp(48px, 7vw, 88px); border-radius: var(--radius-lg); position: relative; overflow: hidden;
-  border: 1px solid var(--border-hi); padding: clamp(18px, 5vw, 64px) clamp(12px, 5vw, 64px) 0;
-  background:
-    radial-gradient(60% 80% at 15% 10%, #14b8a6 0%, transparent 60%),
-    radial-gradient(50% 70% at 90% 30%, #65a30d 0%, transparent 60%),
-    radial-gradient(70% 90% at 60% 110%, #0e7490 0%, transparent 60%),
-    #0b1514;
+/* feature sheets */
+.feat { background: var(--paper-2); }
+.feat h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 4.8cqi, 50px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 16px; }
+.feat .lede { margin: 0; max-width: 36ch; }
+.points { list-style: none; padding: 0; margin: 48px 0 0; }
+.points li { display: block; padding: 11px 0 11px 27px; position: relative; border-top: 1px solid var(--rule); font-family: var(--serif); font-size: 17px; line-height: 1.4; }
+.points li:first-child { border-top: 0; }
+.points li::before { content: "✳"; position: absolute; left: 0; top: 12px; font-size: 13px; color: var(--terracotta); }
+.points code, .lede code { font-family: var(--code); font-size: 13px; background: #26221e12; padding: 1px 5px; }
+.feat .demo-col { position: relative; min-width: 0; }
+
+/* ---------- terminal demo ---------- */
+.term {
+  position: relative; background: var(--term); color: var(--term-text); font-family: var(--code); font-size: 12.5px; line-height: 1.7;
+  margin: 46px -96px 0 0; box-shadow: 0 30px 60px -20px #26221e66; min-height: 300px;
+  display: flex; flex-direction: column;
 }
-.stage::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, #ffffff10, #00000030); pointer-events: none; }
-.stage-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: end; }
-.win {
-  background: #0c0c0f; border: 1px solid #ffffff1f; border-radius: 14px 14px 0 0; box-shadow: 0 30px 80px #00000080;
-  overflow: hidden; min-width: 0;
-}
-.win-bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-.win-bar i { width: 11px; height: 11px; border-radius: 50%; background: #3f3f46; display: block; }
-.win-bar span { margin-left: 10px; font-family: var(--mono); font-size: 12px; color: var(--faint); }
-.term { padding: 18px 20px 24px; font-family: var(--mono); font-size: 13px; line-height: 1.75; color: #d4d4d8; white-space: pre-wrap; min-height: 330px; }
-.term .c { color: var(--faint); }
-.term .a { color: var(--accent); }
-.term .g { color: var(--accent-2); }
-.term .u { color: #fda4af; }
-.term .w { color: var(--text); }
-.caret { display: inline-block; width: 8px; height: 15px; background: var(--accent); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
-.side { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; min-width: 0; }
-.chip-card {
-  background: #0c0c0fe6; border: 1px solid #ffffff1f; border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(8px);
-  box-shadow: 0 20px 50px #00000060; animation: float 7s var(--ease) infinite;
-}
-.chip-card:nth-child(2) { animation-delay: -2.3s; }
-.chip-card:nth-child(3) { animation-delay: -4.6s; }
-.chip-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--faint); font-family: var(--mono); margin-bottom: 6px; }
-.chip-card p { margin: 0; font-size: 14px; color: #e4e4e7; line-height: 1.5; }
-.tag { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--border-hi); color: var(--muted); white-space: nowrap; }
-.tag.t { color: var(--accent); border-color: #5eead440; }
-.tag.l { color: var(--accent-2); border-color: #a3e63540; }
+.term-head { display: flex; align-items: stretch; border-bottom: 1px solid var(--term-line); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--term-dim); }
+.term-head .t { padding: 10px 14px; border: 0; border-right: 1px solid var(--term-line); background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; }
+.term-head button.t { cursor: pointer; }
+.term-head button.t:hover { color: var(--term-text); }
+.term-head .t.on { color: var(--term-text); box-shadow: inset 0 -2px 0 var(--term-hl); }
+.term-head .sp { flex: 1; }
+.term-head .replay { padding: 0 14px; background: none; border: 0; border-left: 1px solid var(--term-line); color: var(--term-dim); cursor: pointer; font-size: 14px; }
+.term-head .replay:hover { color: var(--term-text); }
+.term-body { padding: 14px 16px 18px; white-space: pre-wrap; flex: 1; min-height: 260px; }
+.term-body .d { color: var(--term-dim); }
+.term-body .k { color: var(--term-hl); }
+.term-body .g { color: var(--term-ok); }
+.term-body .w { color: #fff; }
+.caret { display: inline-block; width: 7px; height: 14px; background: var(--term-text); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+.bar { display: inline-block; height: 8px; width: 0; background: var(--term-ok); vertical-align: 1px; transition: width 1.2s var(--ease); }
+.corner { position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-right: 1px solid var(--term-dim); border-bottom: 1px solid var(--term-dim); }
 
-/* sections */
-section { padding: clamp(80px, 11vw, 140px) 0; }
-.alt { background: var(--bg-alt); }
-h2 { font-size: var(--h2); line-height: 1.1; letter-spacing: -.03em; font-weight: 500; margin: 0 0 18px; max-width: 22ch; }
-.sub { color: var(--muted); font-size: 18px; max-width: 58ch; margin: 0 0 48px; font-weight: 300; }
-.label { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.devs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 0; }
+.dev { border: 1px solid var(--term-line); padding: 10px 12px; font-size: 12px; }
+.dev b { font-weight: 500; color: #fff; display: block; }
+.dev span { color: var(--term-dim); font-size: 11px; }
+.dev .segs { display: flex; gap: 3px; margin-top: 8px; }
+.dev .segs i { flex: 1; height: 6px; background: #f4efe626; transition: background .3s; }
+.dev .segs i.f { background: var(--term-ok); }
+.dev.b .segs i.f { background: var(--term-hl); }
+.vault { margin: 10px 16px 0; border: 1px dashed #e7a77466; padding: 8px 12px; font-size: 11.5px; color: var(--term-dim); text-align: center; }
 
-/* stats */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 56px; }
-.stat { padding: 26px 24px; border-right: 1px solid var(--border); }
-.stat:last-child { border-right: 0; }
-.stat b { display: block; font-size: clamp(28px, 3vw, 40px); font-weight: 500; letter-spacing: -.03em; }
-.stat span { color: var(--muted); font-size: 14px; }
-
-/* feature rows */
-.feature {
-  display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: var(--radius);
-  overflow: hidden; background: var(--surface); margin-bottom: 16px; min-height: 340px;
-  transition: border-color .3s var(--ease);
-}
-.feature:hover { border-color: var(--border-hi); }
-.feature.flip .f-art { order: 2; }
-.f-copy { padding: clamp(28px, 4vw, 48px); display: flex; flex-direction: column; justify-content: center; }
-.f-copy h3 { font-size: clamp(20px, 2vw, 26px); font-weight: 500; letter-spacing: -.02em; margin: 14px 0 10px; line-height: 1.25; }
-.f-copy p { color: var(--muted); margin: 0; max-width: 46ch; }
-.f-copy ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.f-copy li { color: var(--muted); font-size: 15px; padding-left: 22px; position: relative; }
-.f-copy li::before { content: ""; position: absolute; left: 0; top: 10px; width: 10px; height: 2px; background: var(--accent); border-radius: 2px; }
-.f-art { position: relative; padding: 28px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.f-art.wash-a { background: radial-gradient(80% 90% at 0% 0%, #134e4a, transparent 70%), #0f1514; }
-.f-art.wash-b { background: radial-gradient(80% 90% at 100% 0%, #365314, transparent 70%), #12140f; }
-.f-art.wash-c { background: radial-gradient(80% 90% at 50% 100%, #164e63, transparent 70%), #0e1316; }
-.panel { width: 100%; max-width: 460px; background: #0b0b0e; border: 1px solid #ffffff1c; border-radius: 12px; box-shadow: 0 24px 60px #00000070; overflow: hidden; }
-.panel-h { padding: 10px 14px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; color: var(--faint); display: flex; justify-content: space-between; }
-.row { display: flex; gap: 12px; align-items: center; padding: 11px 14px; border-bottom: 1px solid #ffffff0a; font-size: 13.5px; }
-.row:last-child { border-bottom: 0; }
-.row .t { color: #e4e4e7; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .m { color: var(--faint); font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
-.src { font-family: var(--mono); font-size: 10.5px; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
-.s-cc { background: #f9731622; color: #fdba74; }
-.s-cx { background: #e4e4e71a; color: #e4e4e7; }
-.s-gm { background: #3b82f622; color: #93c5fd; }
-.s-cu { background: #a855f722; color: #d8b4fe; }
-.s-gpt { background: #10b98122; color: #6ee7b7; }
-.s-nt { background: #eab30822; color: #fde047; }
-.search { margin: 12px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-hi); border-radius: 9px; font-size: 14px; color: #e4e4e7; }
-.search svg { width: 16px; color: var(--faint); flex: none; }
-.hl { background: #5eead42e; color: var(--accent); border-radius: 3px; padding: 0 2px; }
-.mcp { padding: 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: #d4d4d8; white-space: pre-wrap; }
-
-/* marquee */
-.marquee { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 0; overflow: hidden; position: relative; background: var(--surface); }
-.marquee::before, .marquee::after { content: ""; position: absolute; top: 0; bottom: 0; width: 80px; z-index: 2; pointer-events: none; }
-.marquee::before { left: 0; background: linear-gradient(90deg, var(--surface), transparent); }
-.marquee::after { right: 0; background: linear-gradient(-90deg, var(--surface), transparent); }
-.track { display: flex; gap: 12px; width: max-content; animation: scroll 46s linear infinite; padding-left: 12px; }
-.marquee:hover .track { animation-play-state: paused; }
-.source {
-  width: 240px; flex: none; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--bg-alt);
-}
-.source-h { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-weight: 500; }
-.mono-badge { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 500; }
-.source p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
-.source .how { margin-top: 10px; }
-.capture-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
-.capture { border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; background: var(--surface); }
-.capture .items { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 14px; }
-.capture .item b { display: block; font-weight: 500; }
-.capture .item span { color: var(--muted); font-size: 14px; }
-
-/* devices */
-.devices { display: grid; grid-template-columns: 1fr 1.1fr; gap: 48px; align-items: center; }
-.diagram { position: relative; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; background: var(--surface); }
-.dev-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.dev { border: 1px solid var(--border-hi); border-radius: 12px; padding: 14px; background: var(--bg-alt); }
-.dev b { font-weight: 500; font-size: 15px; }
-.dev .m { display: block; font-family: var(--mono); font-size: 11.5px; color: var(--faint); margin-top: 2px; }
-.dev .seg { display: flex; gap: 4px; margin-top: 12px; }
-.dev .seg i { flex: 1; height: 6px; border-radius: 3px; background: #5eead455; }
-.dev .seg i.n { background: var(--accent); animation: segIn 3s var(--ease) infinite; }
-.dev.b .seg i { background: #a3e63555; }
-.dev.b .seg i.n { background: var(--accent-2); }
-.cloud {
-  margin: 18px auto; width: fit-content; display: flex; align-items: center; gap: 10px; padding: 10px 16px;
-  border: 1px dashed #5eead466; border-radius: 100px; font-family: var(--mono); font-size: 12.5px; color: var(--muted);
-}
-.cloud svg { width: 16px; color: var(--accent); }
-.flow { height: 30px; position: relative; }
-.flow::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: linear-gradient(var(--accent), transparent); }
-.cmds { display: grid; gap: 10px; margin-top: 28px; }
-.cmd { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
-.cmd .p { color: var(--accent); }
-.cmd .note { margin-left: auto; color: var(--faint); font-size: 12px; text-align: right; }
-
-/* privacy */
-.cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 26px; transition: border-color .3s var(--ease), transform .3s var(--ease); }
-.card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
-.card .ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: #5eead414; color: var(--accent); border: 1px solid #5eead42a; margin-bottom: 20px; }
-.card .ico svg { width: 20px; }
-.card h3 { margin: 0 0 8px; font-size: 19px; font-weight: 500; letter-spacing: -.01em; }
-.card p { margin: 0; color: var(--muted); font-size: 15px; }
-.card code { font-size: 13px; color: #d4d4d8; background: var(--surface-hi); padding: 1px 6px; border-radius: 5px; }
-
-/* tools */
-.center { text-align: center; }
-.center h2, .center .sub { margin-left: auto; margin-right: auto; }
-.tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 0 auto 40px; max-width: 760px; }
-.tool { display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 10px; border: 1px solid var(--border); border-radius: 100px; background: var(--surface); font-size: 15px; transition: border-color .2s var(--ease); }
-.tool:hover { border-color: #5eead455; }
-.tool .mono-badge { width: 28px; height: 28px; border-radius: 50%; }
-.tool small { font-family: var(--mono); font-size: 11px; color: var(--faint); }
-
-/* start */
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.step { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 24px; display: flex; flex-direction: column; }
-.step .n { font-family: var(--mono); font-size: 12px; color: var(--accent); }
-.step h3 { margin: 10px 0 6px; font-weight: 500; font-size: 19px; }
-.step p { color: var(--muted); font-size: 15px; margin: 0 0 18px; flex: 1; }
-.code { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 6px 6px 6px 14px; font-family: var(--mono); font-size: 13px; overflow: hidden; }
-.code span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.final { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: clamp(36px, 6vw, 72px); position: relative; overflow: hidden; background: radial-gradient(60% 120% at 100% 0%, #134e4a 0%, transparent 60%), var(--surface); margin-top: 16px; }
-.final h2 { max-width: 18ch; }
-
-/* footer */
-footer { border-top: 1px solid var(--border); padding: 56px 0 0; overflow: hidden; }
-.foot { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 32px; }
-.foot h4 { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--text); margin: 0 0 14px; font-weight: 500; }
-.foot a { display: block; color: var(--muted); font-size: 15px; margin-bottom: 8px; transition: color .2s var(--ease); }
-.foot a:hover { color: var(--text); }
-.foot p { color: var(--muted); margin: 12px 0 0; }
-.legal { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--border); margin-top: 40px; padding-top: 20px; color: var(--faint); font-size: 13px; }
-.wordmark {
-  font-size: clamp(90px, 22vw, 300px); font-weight: 700; letter-spacing: -.06em; line-height: .8; text-align: center;
-  margin-top: 40px; background: linear-gradient(180deg, #ffffff12, transparent 85%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  user-select: none;
-}
+/* final + footer sheet */
+.end { background: var(--ink); color: var(--paper); }
+.end .margin, .end .body.split { border-color: #f4efe659; }
+.end .margin .note { color: #f4efe680; }
+.end h2 { font-family: var(--serif); font-weight: 300; font-size: clamp(38px, 5.6cqi, 64px); line-height: 1; letter-spacing: -.02em; margin: 0 0 28px; }
+.end h2 em { color: var(--ochre); }
+.end .points li { border-color: #f4efe62e; }
+.end .points li::before { color: var(--ochre); }
+.end .points code { background: #f4efe61a; }
+.end .row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 28px; }
+.end .cmd { color: var(--paper); }
+.foot { padding: 44px 40px 40px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; }
+.foot p { margin: 0; color: #f4efe6b3; max-width: 34ch; }
+.foot .links { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; text-transform: uppercase; letter-spacing: .1em; font-size: 11.5px; }
+.foot .links a { text-decoration: none; color: #f4efe6cc; }
+.foot .links a:hover { color: var(--paper); }
+.foot .legal { margin-top: auto; display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; color: #f4efe680; }
+.spacer { height: 120px; }
 
 /* reveal */
-.reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
-.reveal.in { opacity: 1; transform: none; }
-
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 #5eead470; } 70% { box-shadow: 0 0 0 9px #5eead400; } 100% { box-shadow: 0 0 0 0 #5eead400; } }
+.rv { opacity: 0; transform: translateX(28px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+.rv.in { opacity: 1; transform: none; }
 @keyframes blink { 50% { opacity: 0; } }
-@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-@keyframes scroll { to { transform: translateX(-50%); } }
-@keyframes segIn { 0%, 30% { opacity: .2; } 60%, 100% { opacity: 1; } }
-
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  .reveal { opacity: 1; transform: none; }
+  .rv { opacity: 1; transform: none; transition: none; }
+  .caret { animation: none; }
+  .bar { transition: none; }
 }
-@media (max-width: 900px) {
-  .stage-grid, .feature, .devices, .capture-row { grid-template-columns: 1fr; }
-  .feature.flip .f-art { order: 0; }
-  .side { display: none; }
-  .stats { grid-template-columns: 1fr 1fr; }
-  .stat:nth-child(2) { border-right: 0; }
-  .stat:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
-  .cards3, .steps { grid-template-columns: 1fr; }
-  .foot { grid-template-columns: 1fr 1fr; }
-  .nav-links a:not(.btn-sm) { display: none; }
-  .term { min-height: 0; font-size: 12px; }
-  .cmd .note { display: none; }
-  .capture .items { grid-template-columns: 1fr; }
-  .install { font-size: 12px; height: auto; min-height: 48px; padding: 6px 6px 6px 14px; }
+
+/* ---------- smaller screens ---------- */
+@media (max-width: 1180px) { .term { margin-right: -40px; } }
+@media (max-width: 960px) {
+  .rail {
+    position: sticky; top: 0; bottom: auto; width: auto; flex-direction: row; align-items: center;
+    justify-content: space-between; padding: 12px 16px; background: var(--paper); border-bottom: 1px solid var(--rule);
+  }
+  .rail nav, .rail .rail-cta .cmd { display: none; }
+  .rail .rail-cta { margin: 0; }
+  .logo-word { font-size: 22px; }
+  main { margin-left: 0; padding: 16px; }
+  .sheet { grid-template-columns: 28px minmax(0, 1fr); width: 100%; }
+  .sheet .margin { grid-row: span 2; }
+  .sheet .margin .note { display: none; }
+  .sheet .body, .hero .right, .foot { padding: 30px 20px 26px; }
+  .sheet .body.split { border-right: 0; }
+  .hero .right, .feat .demo-col, .foot { grid-column: 2; }
+  .hero .right { padding-top: 0; }
+  .hero { min-height: 0; }
+  .term { margin: 0 0 22px; min-height: 0; }
+  .feat .demo-col { padding: 0 12px; }
+  .points { margin-top: 28px; }
+  .band { height: 72px; width: 100%; }
+  .band .key { left: 0; }
+  .band .quote { font-size: 15px; }
+  .spacer { height: 32px; }
+  .term-body { min-height: 0; font-size: 11px; white-space: pre; overflow-x: auto; }
+  .term-head .t { padding: 9px 10px; }
 }
 </style>
 </head>
 <body>
 
-<header class="nav">
-  <div class="nav-inner">
-    <a href="#" class="brand" aria-label="NexusAI home">
-      <span class="logo" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.8 7.8 10.6 16M16.2 7.8 13.4 16M8.5 6h7"/></svg>
-      </span>
-      NexusAI
-    </a>
-    <nav class="nav-links" aria-label="Primary">
-      <a href="#how">How it works</a>
-      <a href="#sources">Sources</a>
-      <a href="#devices">Sync</a>
-      <a href="#privacy">Privacy</a>
-      <a href="#start" class="btn-sm">Get started</a>
-    </nav>
+<aside class="rail" aria-label="Site">
+  <a href="#top" class="logo" aria-label="Anamnesis home">
+    <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="15" fill="#a9502c"/>
+      <circle cx="16" cy="16" r="12.4" fill="none" stroke="#f4efe6" stroke-width=".8" stroke-dasharray="1.6 2"/>
+      <path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f4efe6"/>
+    </svg>
+    <span class="logo-word">anamnesis</span>
+  </a>
+  <nav aria-label="Main">
+    <a href="#intro" class="on">Product</a>
+    <a href="#history">History</a>
+    <a href="#agents">Agents</a>
+    <a href="#computers">Computers</a>
+    <a href="#install">Install</a>
+  </nav>
+  <div class="rail-cta">
+    <button class="cmd" data-copy="anam sync">anam sync <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
+    <a class="btn" href="#install">Install locally</a>
   </div>
-</header>
+</aside>
 
-<main>
-  <!-- HERO -->
-  <div class="dots">
-    <div class="wrap hero">
-      <span class="eyebrow reveal"><span class="pulse"></span>Local-first · MCP · open source</span>
-      <h1 class="reveal">One <strong class="grad">memory</strong> under every AI you use.</h1>
-      <p class="lead reveal">NexusAI turns your Claude Code, Codex, Gemini CLI, Cursor and chat history into <strong>one searchable memory on your machine</strong>, then hands it back to every agent, so you never re-explain your project again.</p>
-      <div class="cta-row reveal">
-        <a href="#start" class="btn btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
-          Get started
-        </a>
-        <div class="install">
-          <span><span class="prompt">$</span> nexus sync &amp;&amp; nexus connect all</span>
-          <button class="copy" data-copy="nexus sync && nexus connect all">copy</button>
-        </div>
-      </div>
+<main id="top">
 
-      <div class="stage reveal" aria-label="NexusAI in action">
-        <div class="stage-grid">
-          <div class="win">
-            <div class="win-bar"><i></i><i></i><i></i><span>~/code/checkout-api — claude</span></div>
-            <div class="term" id="term"><span class="c">› new session, different tool, zero context typed</span>
-
-<span class="u">you</span>  why did we drop Redis for the rate limiter?
-
-<span class="a">⏺ nexus.search_memory</span><span class="c">("rate limiter redis", project="checkout-api")</span>
-  <span class="c">⎿</span> 3 hits · <span class="g">codex</span> 12 days ago · <span class="g">cursor</span> 9 days ago · <span class="g">chatgpt</span> 3 weeks ago
-
-<span class="w">claude</span>  You decided this in a Codex session on Oct 30:
-  the token bucket moved into Postgres (advisory locks)
-  because Redis was the only stateful dependency left,
-  and p99 stayed under 4 ms in the Cursor load test.
-  Want me to keep that design for the new endpoint?<span class="caret"></span></div>
-          </div>
-          <div class="side" aria-hidden="true">
-            <div class="chip-card">
-              <div class="chip-head"><span>search_memory</span><span class="tag t">codex</span></div>
-              <p>“Move the limiter to Postgres advisory locks — one fewer service to run.”</p>
-            </div>
-            <div class="chip-card">
-              <div class="chip-head"><span>recent_conversations</span><span class="tag l">cursor</span></div>
-              <p>Load test: 2k rps, p99 3.8 ms on the Postgres bucket.</p>
-            </div>
-            <div class="chip-card">
-              <div class="chip-head"><span>remember</span><span class="tag">note</span></div>
-              <p>Decision log · checkout-api · rate limiting</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stats reveal">
-        <div class="stat"><b>4</b><span>coding agents read live from disk</span></div>
-        <div class="stat"><b>3</b><span>web chat exports imported</span></div>
-        <div class="stat"><b>0</b><span>accounts, servers or cloud required</span></div>
-        <div class="stat"><b>~5 min</b><span>to import 6k messages on a laptop</span></div>
-      </div>
+  <section class="sheet hero rv" id="intro" aria-labelledby="h-hero">
+    <div class="margin"><span class="note">I · Recollection</span></div>
+    <div class="body split">
+      <h1 id="h-hero">Your Agents Already Know. Let Them Remember.</h1>
+      <div class="greek">ἀνάμνησις: to learn is to remember.</div>
     </div>
-  </div>
-
-  <!-- HOW -->
-  <section id="how">
-    <div class="wrap">
-      <span class="label reveal">How it works</span>
-      <h2 class="reveal" style="margin-top:14px">Built from the history <strong>you already have</strong>.</h2>
-      <p class="sub reveal">No new habit to form. NexusAI starts with months of your past sessions on day one, and keeps learning in the background.</p>
-
-      <article class="feature reveal">
-        <div class="f-art wash-a">
-          <div class="panel">
-            <div class="panel-h"><span>nexus sync</span><span>first run</span></div>
-            <div class="row"><span class="src s-cc">claude-code</span><span class="t">44 sessions found in ~/.claude/projects</span><span class="m">✓</span></div>
-            <div class="row"><span class="src s-cx">codex</span><span class="t">rollouts in ~/.codex/sessions</span><span class="m">✓</span></div>
-            <div class="row"><span class="src s-gm">gemini-cli</span><span class="t">checkpoints replayed from ~/.gemini</span><span class="m">✓</span></div>
-            <div class="row"><span class="src s-cu">cursor</span><span class="t">composer chats from state.vscdb</span><span class="m">✓</span></div>
-            <div class="row"><span class="src s-gpt">chatgpt</span><span class="t">conversations.json export</span><span class="m">import</span></div>
-            <div class="row"><span class="t" style="color:var(--accent)">5,905 messages imported · indexing…</span><span class="m">re-runs are incremental</span></div>
-          </div>
-        </div>
-        <div class="f-copy">
-          <span class="label">01 · Import</span>
-          <h3>Everything you've already said to an AI, in one place</h3>
-          <p>NexusAI reads the transcripts your tools already keep on disk. Only files that changed are re-read, and nothing is imported twice.</p>
-          <ul>
-            <li>Claude Code, Codex, Gemini CLI and Cursor, read in place</li>
-            <li>ChatGPT, claude.ai and Gemini web via their data exports</li>
-            <li>Noise stripped: tool calls, system reminders, sidechains</li>
-          </ul>
-        </div>
-      </article>
-
-      <article class="feature flip reveal">
-        <div class="f-art wash-b">
-          <div class="panel">
-            <div class="search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-              why did the migration fail on staging
-            </div>
-            <div class="row"><span class="src s-cu">cursor</span><span class="t">the <span class="hl">migration</span> locks <span class="hl">staging</span> because…</span><span class="m">0.91</span></div>
-            <div class="row"><span class="src s-cc">claude-code</span><span class="t">add NOT VALID then validate the constraint</span><span class="m">0.87</span></div>
-            <div class="row"><span class="src s-gpt">chatgpt</span><span class="t">Postgres online schema change options</span><span class="m">0.74</span></div>
-            <div class="row"><span class="src s-nt">note</span><span class="t">Notes: deploys — never run alembic in CI</span><span class="m">0.70</span></div>
-          </div>
-        </div>
-        <div class="f-copy">
-          <span class="label">02 · Search</span>
-          <h3>Ask by meaning, filter by tool or project</h3>
-          <p>Hybrid search pairs full-text with local embeddings, so “that thing about the staging lock” finds the right answer in any tool, from any week.</p>
-          <ul>
-            <li>Semantic and keyword search, ranked together</li>
-            <li>Scope by source, project folder, or thread</li>
-            <li>Terminal UI, web UI and CLI all share one store</li>
-          </ul>
-        </div>
-      </article>
-
-      <article class="feature reveal">
-        <div class="f-art wash-c">
-          <div class="panel">
-            <div class="panel-h"><span>nexus · MCP server</span><span>stdio</span></div>
-            <div class="mcp"><span style="color:var(--accent)">search_memory</span>(query, source?, project?)
-<span style="color:var(--accent)">recent_conversations</span>(limit?, source?)
-<span style="color:var(--accent)">get_conversation</span>(thread_id, last_n?)
-<span style="color:var(--accent-2)">remember</span>(note, topic)
-
-<span style="color:var(--faint)">→ every agent can read what the others learned,
-  and write down decisions for the next one.</span></div>
-          </div>
-        </div>
-        <div class="f-copy">
-          <span class="label">03 · Recall</span>
-          <h3>Every agent remembers what the others learned</h3>
-          <p>One command registers NexusAI as an MCP server in each tool. Your agents look things up before asking you, and save decisions as they make them.</p>
-          <ul>
-            <li><code class="mono">nexus connect all</code> edits configs safely, with backups</li>
-            <li>Open sessions see new memories within a minute</li>
-            <li>Notes written in one tool show up in every other</li>
-          </ul>
-        </div>
-      </article>
+    <div class="right">
+      <p>One local memory under Claude Code, Codex, Gemini CLI, Cursor and your chat apps. Every agent sees what the others learned.</p>
+      <a class="btn light" href="#install" style="width:fit-content">Install locally</a>
+      <button class="cmd" data-copy="anam sync">anam sync <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
     </div>
+    <span class="tick" style="top:56px"></span><span class="tick" style="top:50%"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <!-- SOURCES -->
-  <section id="sources" class="alt">
-    <div class="wrap">
-      <h2 class="reveal">Remembers <strong>every tool</strong> you talk to.</h2>
-      <p class="sub reveal">Coding agents are read straight from disk as you work. Web chats come in through the export each service already offers.</p>
+  <div class="band" aria-hidden="true"><span class="key"></span><span class="quote">“the soul has learned all things.” · Meno 81c</span></div>
 
-      <div class="capture-row reveal">
-        <div class="capture">
-          <span class="label">Live from disk</span>
-          <div class="items">
-            <div class="item"><b>Terminal agents</b><span>Claude Code, Codex CLI, Gemini CLI</span></div>
-            <div class="item"><b>Editors</b><span>Cursor composer and chat</span></div>
-          </div>
-        </div>
-        <div class="capture">
-          <span class="label">From exports</span>
-          <div class="items" style="grid-template-columns:1fr">
-            <div class="item"><b>Web chats</b><span>ChatGPT, claude.ai, Gemini</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="marquee reveal" aria-label="Supported sources">
-        <div class="track" id="track"></div>
+  <section class="sheet feat rv" id="history" aria-labelledby="h-history">
+    <div class="margin"><span class="note">II · History</span></div>
+    <div class="body split">
+      <h2 id="h-history">It Starts Full.</h2>
+      <p class="lede">No new habit to build. Your tools already wrote everything down.</p>
+      <ul class="points">
+        <li>Reads Claude Code, Codex, Gemini CLI and Cursor right where they keep their transcripts.</li>
+        <li>Imports ChatGPT, claude.ai and Gemini web from their data exports.</li>
+        <li>Incremental: only changed files are re-read, and nothing is stored twice.</li>
+      </ul>
+    </div>
+    <div class="demo-col">
+      <div class="term" data-demo="sync">
+        <div class="term-head"><span class="t on">Sync</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
+        <div class="term-body"></div>
+        <span class="corner"></span>
       </div>
     </div>
+    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <!-- DEVICES -->
-  <section id="devices">
-    <div class="wrap devices">
-      <div>
-        <span class="label reveal">Every computer</span>
-        <h2 class="reveal" style="margin-top:14px">New laptop. New account. <strong>Same memory.</strong></h2>
-        <p class="sub reveal" style="margin-bottom:0">Pair your machines with one code. Each computer writes its own encrypted log to a folder you already sync (iCloud, Dropbox or Syncthing) and reads everyone else's. No server, no conflicts, and nothing your cloud provider can read.</p>
-        <div class="cmds reveal">
-          <div class="cmd"><span class="p">$</span> nexus share<span class="note">first computer · prints a pairing code</span></div>
-          <div class="cmd"><span class="p">$</span> nexus join K7QF-…<span class="note">every other computer</span></div>
-          <div class="cmd"><span class="p">$</span> nexus devices<span class="note">see who's in sync</span></div>
+  <div class="band" aria-hidden="true"><span class="key"></span></div>
+
+  <section class="sheet feat rv" id="agents" aria-labelledby="h-agents">
+    <div class="margin"><span class="note">III · Agents</span></div>
+    <div class="body split">
+      <h2 id="h-agents">Ask Once. Every Agent Knows.</h2>
+      <p class="lede">An MCP server gives each tool the same memory. Agents look things up before asking you, and write down decisions as they go.</p>
+      <ul class="points">
+        <li><code>search_memory</code> <code>recent_conversations</code> <code>get_conversation</code> <code>remember</code></li>
+        <li><code>anam connect all</code> registers it everywhere, backing up every config it touches.</li>
+        <li>Sessions that are already open see new memories within a minute.</li>
+      </ul>
+    </div>
+    <div class="demo-col">
+      <div class="term" data-demo="agents">
+        <div class="term-head" role="tablist" aria-label="Agent">
+          <button class="t on" role="tab" aria-selected="true" data-tab="0">Claude Code</button>
+          <button class="t" role="tab" aria-selected="false" data-tab="1">Cursor</button>
+          <button class="t" role="tab" aria-selected="false" data-tab="2">Codex</button>
+          <span class="sp"></span><button class="replay" aria-label="Play again">↻</button>
         </div>
-      </div>
-      <div class="diagram reveal" aria-hidden="true">
-        <div class="dev-row">
-          <div class="dev"><b>Work MacBook</b><span class="m">writes device-a/*.nxs</span><div class="seg"><i></i><i></i><i></i><i class="n"></i></div></div>
-          <div class="dev b"><b>Home desktop</b><span class="m">writes device-b/*.nxs</span><div class="seg"><i></i><i></i><i class="n"></i><i></i></div></div>
-        </div>
-        <div class="flow"></div>
-        <div class="cloud">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-          iCloud Drive/NexusAI · AES-256-GCM
-        </div>
-        <div class="flow" style="transform:scaleY(-1)"></div>
-        <div class="dev-row">
-          <div class="dev"><b>Claude Code</b><span class="m">sees both devices</span></div>
-          <div class="dev b"><b>Cursor · Codex</b><span class="m">see both devices</span></div>
-        </div>
+        <div class="term-body"></div>
+        <span class="corner"></span>
       </div>
     </div>
+    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <!-- PRIVACY -->
-  <section id="privacy" class="alt">
-    <div class="wrap">
-      <h2 class="reveal"><strong>Local-first</strong> isn't a setting. It's the architecture.</h2>
-      <p class="sub reveal">Your memory is a SQLite file and a vector index in your home folder. Read it, back it up, delete it.</p>
-      <div class="cards3">
-        <div class="card reveal">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
-          <h3>Stays on your machine</h3>
-          <p>Everything lives in <code>~/.nexus-ai</code>. Embeddings run locally on your CPU. No account, no telemetry.</p>
+  <div class="band" aria-hidden="true"><span class="key"></span><span class="quote">“not learning, but recollection.”</span></div>
+
+  <section class="sheet feat rv" id="computers" aria-labelledby="h-computers">
+    <div class="margin"><span class="note">IV · Computers</span></div>
+    <div class="body split">
+      <h2 id="h-computers">New Laptop. Same Memory.</h2>
+      <p class="lede">Pair your computers with one code. Memory travels through a folder you already sync, encrypted so the cloud can't read it.</p>
+      <ul class="points">
+        <li>Each computer writes only its own log, so there's nothing to conflict.</li>
+        <li>AES-256-GCM. The key lives in your pairing code, never in the folder.</li>
+        <li>iCloud Drive by default, Dropbox or Syncthing too. No server of ours.</li>
+      </ul>
+    </div>
+    <div class="demo-col">
+      <div class="term" data-demo="devices">
+        <div class="term-head"><span class="t on">Devices</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
+        <div class="devs">
+          <div class="dev"><b>work-macbook</b><span>writes its own log</span><div class="segs" data-dev="a"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="dev b"><b>home-desktop</b><span>writes its own log</span><div class="segs" data-dev="b"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
         </div>
-        <div class="card reveal">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
-          <h3>Encrypted end to end</h3>
-          <p>Sync is AES-256-GCM. The key exists only in your pairing code, never in the synced folder.</p>
-        </div>
-        <div class="card reveal">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h1.1"/><circle cx="16" cy="9" r="1"/></svg></div>
-          <h3>Your keys, if any</h3>
-          <p>Memory needs no API key at all. The optional chat side uses your own keys from <code>.env</code>.</p>
-        </div>
+        <div class="vault">iCloud Drive/Anamnesis · encrypted segments only</div>
+        <div class="term-body" style="min-height:150px"></div>
+        <span class="corner"></span>
       </div>
     </div>
+    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
 
-  <!-- TOOLS -->
-  <section class="dots">
-    <div class="wrap center">
-      <h2 class="reveal">Context that follows you <strong>across every tool</strong>.</h2>
-      <p class="sub reveal">One MCP server, registered everywhere with a single command.</p>
-      <div class="tools reveal" id="tools"></div>
-      <a href="#start" class="btn btn-primary reveal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
-        Connect your tools
+  <div class="band" aria-hidden="true"><span class="key"></span></div>
+
+  <section class="sheet feat rv" id="yours" aria-labelledby="h-private">
+    <div class="margin"><span class="note">V · Yours</span></div>
+    <div class="body split">
+      <h2 id="h-private">It's Just a Folder.</h2>
+      <p class="lede">A SQLite file and a vector index in your home directory. Read it, back it up, delete it.</p>
+      <ul class="points">
+        <li>Embeddings run on your CPU. No account, no telemetry, no API key needed.</li>
+        <li>Your own keys from <code>.env</code> are used only if you chat inside Anamnesis.</li>
+        <li>Terminal UI, web UI and CLI all read the same store.</li>
+      </ul>
+    </div>
+    <div class="demo-col">
+      <div class="term" data-demo="folder">
+        <div class="term-head"><span class="t on">~/.anamnesis</span><span class="sp"></span><button class="replay" aria-label="Play again">↻</button></div>
+        <div class="term-body"></div>
+        <span class="corner"></span>
+      </div>
+    </div>
+    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
+  </section>
+
+  <div class="band" aria-hidden="true"><span class="key"></span></div>
+
+  <section class="sheet end rv" id="install" aria-labelledby="h-end">
+    <div class="margin"><span class="note">VI · Begin</span></div>
+    <div class="body split">
+      <h2 id="h-end">Stop Re-explaining. <em>Start Remembering.</em></h2>
+      <ul class="points" style="margin-top:0">
+        <li><code>pip install -e .</code> in a clone of the repo</li>
+        <li><code>anam sync</code> imports what's on this machine</li>
+        <li><code>anam connect all</code> gives every agent the memory</li>
+      </ul>
+      <div class="row">
+        <button class="btn light" data-copy="anam sync && anam connect all">Copy setup commands</button>
+        <button class="cmd" data-copy="anam share">anam share <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><rect x="5" y="5" width="8.5" height="8.5"/><path d="M3 10.5V2.5h8"/></svg><span class="ok" hidden>copied</span></button>
+      </div>
+    </div>
+    <footer class="foot">
+      <a href="#top" class="logo">
+        <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="#a9502c"/><circle cx="16" cy="16" r="12.4" fill="none" stroke="#f4efe6" stroke-width=".8" stroke-dasharray="1.6 2"/><path d="M16 8 9.6 24h2.9l1.4-3.7h4.2l1.4 3.7h2.9L16 8Zm-1.3 10.1L16 14.4l1.3 3.7h-2.6Z" fill="#f4efe6"/></svg>
+        <span class="logo-word">anamnesis</span>
       </a>
-    </div>
+      <p>Local-first memory for people who talk to a lot of AIs. Python 3.11+ on macOS and Linux.</p>
+      <nav class="links" aria-label="Footer">
+        <a href="#history">History</a><a href="#agents">Agents</a>
+        <a href="#computers">Computers</a><a href="#yours">Privacy</a>
+        <a href="#">GitHub</a><a href="#">Changelog</a>
+      </nav>
+      <div class="legal"><span>© 2026 Anamnesis</span><span>Local-first</span></div>
+    </footer>
+    <span class="tick" style="top:56px"></span><span class="tick" style="bottom:40px"></span>
   </section>
-
-  <!-- START -->
-  <section id="start">
-    <div class="wrap">
-      <span class="label reveal">Get started</span>
-      <h2 class="reveal" style="margin-top:14px">Three commands to <strong>a memory that's already full</strong>.</h2>
-      <p class="sub reveal">Python 3.11+ on macOS or Linux.</p>
-      <div class="steps">
-        <div class="step reveal">
-          <span class="n">01</span><h3>Install</h3>
-          <p>Clone the repo and install it into a virtual environment.</p>
-          <div class="code"><span>pip install -e .</span><button class="copy" data-copy="pip install -e .">copy</button></div>
-        </div>
-        <div class="step reveal">
-          <span class="n">02</span><h3>Import your history</h3>
-          <p>Reads every supported tool on this machine and builds the search index.</p>
-          <div class="code"><span>nexus sync</span><button class="copy" data-copy="nexus sync">copy</button></div>
-        </div>
-        <div class="step reveal">
-          <span class="n">03</span><h3>Connect your agents</h3>
-          <p>Registers the MCP server in Claude Code, Claude Desktop, Cursor, Gemini CLI and Codex.</p>
-          <div class="code"><span>nexus connect all</span><button class="copy" data-copy="nexus connect all">copy</button></div>
-        </div>
-      </div>
-
-      <div class="final reveal">
-        <h2>Stop re-explaining your project to <strong>every new chat</strong>.</h2>
-        <p class="sub" style="margin-bottom:28px">Your AI tools already did the remembering. NexusAI just lets them share it.</p>
-        <div class="cta-row">
-          <a href="#start" class="btn btn-primary">Get started</a>
-          <a href="#how" class="btn">See how it works</a>
-        </div>
-      </div>
-    </div>
-  </section>
+  <div class="spacer"></div>
 </main>
 
-<footer>
-  <div class="wrap">
-    <div class="foot">
-      <div>
-        <a href="#" class="brand" style="color:var(--text);font-size:18px">
-          <span class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.8 7.8 10.6 16M16.2 7.8 13.4 16M8.5 6h7"/></svg></span>
-          NexusAI
-        </a>
-        <p>The shared memory layer for your AI tools.</p>
-      </div>
-      <div><h4>Product</h4><a href="#how">How it works</a><a href="#sources">Sources</a><a href="#devices">Sync</a><a href="#privacy">Privacy</a></div>
-      <div><h4>Use it</h4><a href="#start">Install</a><a href="#tools">MCP tools</a><a href="#start">CLI</a></div>
-      <div><h4>Project</h4><a href="#">GitHub</a><a href="#">Changelog</a><a href="#">License</a></div>
-    </div>
-    <div class="legal"><span>© 2026 NexusAI</span><span class="mono">local-first · made for people who talk to a lot of AIs</span></div>
-    <div class="wordmark" aria-hidden="true">nexus</div>
-  </div>
-</footer>
-
 <script>
-  const SOURCES = [
-    ["Claude Code", "CC", "#f9731633", "#fdba74", "Sessions, decisions and project context from ~/.claude.", "live"],
-    ["Codex CLI", "CX", "#e4e4e71f", "#e4e4e7", "Rollouts, agent work and code changes.", "live"],
-    ["Gemini CLI", "GM", "#3b82f633", "#93c5fd", "Checkpointed chats, replayed in order.", "live"],
-    ["Cursor", "CU", "#a855f733", "#d8b4fe", "Composer threads and inline chat history.", "live"],
-    ["ChatGPT", "GP", "#10b98133", "#6ee7b7", "Your data export, current branch of each chat.", "export"],
-    ["claude.ai", "CA", "#f9731633", "#fdba74", "Web and desktop conversations via export.", "export"],
-    ["Gemini web", "GW", "#3b82f633", "#93c5fd", "Google Takeout activity, grouped into chats.", "export"],
-    ["NexusAI chat", "NX", "#5eead433", "#5eead4", "Chats in the built-in multi-model workspace.", "native"],
-    ["Notes", "NT", "#eab30833", "#fde047", "Decisions agents save with remember().", "native"],
-  ];
-  const card = ([name, mono, bg, fg, desc, how]) => `
-    <div class="source">
-      <div class="source-h"><span class="mono-badge" style="background:${bg};color:${fg}">${mono}</span>${name}</div>
-      <p>${desc}</p>
-      <div class="how"><span class="tag ${how === "live" ? "t" : how === "export" ? "" : "l"}">${how}</span></div>
-    </div>`;
-  const row = SOURCES.map(card).join("");
-  document.getElementById("track").innerHTML = row + row;
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const TOOLS = [
-    ["Claude Code", "CC", "#f9731633", "#fdba74"], ["Claude Desktop", "CD", "#f9731633", "#fdba74"],
-    ["Cursor", "CU", "#a855f733", "#d8b4fe"], ["Gemini CLI", "GM", "#3b82f633", "#93c5fd"],
-    ["Codex", "CX", "#e4e4e71f", "#e4e4e7"], ["any MCP client", "+", "#5eead433", "#5eead4"],
-  ];
-  document.getElementById("tools").innerHTML = TOOLS.map(([n, m, bg, fg]) =>
-    `<span class="tool"><span class="mono-badge" style="background:${bg};color:${fg}">${m}</span>${n}</span>`).join("");
+  // Each line: [delay before it appears (ms), html]. A caret trails the last line.
+  const SCRIPTS = {
+    sync: () => [
+      [0, '<span class="k">$</span> <span class="w">anam sync</span>'],
+      [500, '<span class="d">scanning this machine…</span>'],
+      [500, '  claude-code   <span class="g">44 sessions</span>   ~/.claude/projects'],
+      [300, '  codex         <span class="g">12 sessions</span>   ~/.codex/sessions'],
+      [300, '  gemini-cli    <span class="g"> 7 sessions</span>   ~/.gemini/tmp'],
+      [300, '  cursor        <span class="g">19 chats</span>      state.vscdb'],
+      [500, ''],
+      [100, 'embedding  <span class="bar" data-grow="120px"></span> <span class="d">5,906 msgs</span>'],
+      [1500, '<span class="g">✓</span> memory ready  <span class="d">· next run reads only changes</span>'],
+    ],
+    agents: (tab) => [
+      [
+        [0, '<span class="d">~/code/checkout-api · claude</span>'],
+        [500, '<span class="k">&gt;</span> <span class="w">why did we drop redis for the rate limiter?</span>'],
+        [700, '<span class="k">●</span> anamnesis.search_memory<span class="d">("rate limiter redis")</span>'],
+        [500, '  <span class="d">⎿ 3 hits · codex 12d · cursor 9d · chatgpt 3w</span>'],
+        [700, 'You decided this in Codex on Oct 30: the token'],
+        [100, 'bucket moved into Postgres advisory locks, since'],
+        [100, 'Redis was the last stateful service. The Cursor'],
+        [100, 'load test kept p99 under 4 ms. Keep that design?'],
+      ],
+      [
+        [0, '<span class="d">composer · checkout-api</span>'],
+        [500, '<span class="k">&gt;</span> <span class="w">add the limiter to /refunds like the others</span>'],
+        [700, '<span class="k">●</span> anamnesis.recent_conversations<span class="d">(project=…)</span>'],
+        [500, '  <span class="d">⎿ claude-code 2h ago · "rate limiter design"</span>'],
+        [700, 'Using the Postgres bucket from your Claude Code'],
+        [100, 'session this morning (same 20 req/s per key).'],
+        [100, 'Edited <span class="g">refunds.py</span> +14 −2'],
+      ],
+      [
+        [0, '<span class="d">codex · checkout-api</span>'],
+        [500, '<span class="k">&gt;</span> <span class="w">ship it, and note why we chose postgres</span>'],
+        [700, '<span class="k">●</span> anamnesis.remember<span class="d">(topic="checkout-api")</span>'],
+        [500, '  <span class="d">⎿ saved to Notes: checkout-api</span>'],
+        [700, 'Saved. Claude Code, Cursor and Gemini CLI will'],
+        [100, 'find this the next time anyone asks about rate'],
+        [100, 'limiting in this repo.'],
+      ],
+    ][tab],
+    devices: () => [
+      [0, '<span class="k">work-macbook $</span> <span class="w">anam share</span>'],
+      [600, '  pairing code  <span class="g">K7QF-2MXA-…-PL4D</span>'],
+      [900, '<span class="k">home-desktop $</span> <span class="w">anam join K7QF-…</span>'],
+      [700, '  <span class="g">✓</span> joined · pulled 6 segments'],
+      [700, '  <span class="g">✓</span> searchable here <span class="d">· syncs both ways</span>'],
+    ],
+    folder: () => [
+      [0, '<span class="k">$</span> <span class="w">ls ~/.anamnesis</span>'],
+      [400, 'anamnesis.db   <span class="d">conversations + full-text</span>'],
+      [200, 'vectors/       <span class="d">local embeddings</span>'],
+      [200, 'models/        <span class="d">bge-small, runs on CPU</span>'],
+      [500, ''],
+      [100, '<span class="k">$</span> <span class="w">anam status</span>'],
+      [400, '  Claude Code        44 conversations'],
+      [150, '  Codex CLI          12 conversations'],
+      [150, '  Cursor             19 conversations'],
+      [150, '  messages (total)   <span class="g">5,906</span>'],
+    ],
+  };
 
-  document.querySelectorAll(".copy").forEach((b) => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "copied"; }
-    catch { b.textContent = "select"; }
-    setTimeout(() => (b.textContent = "copy"), 1400);
-  }));
+  const runs = new WeakMap();
+  async function play(term, tab = 0) {
+    const token = {};
+    runs.set(term, token);
+    const body = term.querySelector(".term-body");
+    const kind = term.dataset.demo;
+    const lines = SCRIPTS[kind](tab);
+    const segA = [...term.querySelectorAll('[data-dev="a"] i')];
+    const segB = [...term.querySelectorAll('[data-dev="b"] i')];
+    [...segA, ...segB].forEach((s) => s.classList.remove("f"));
+    const out = [];
+    body.innerHTML = '<span class="caret"></span>';
+    for (const [i, [delay, html]] of lines.entries()) {
+      if (!reduce) await new Promise((r) => setTimeout(r, delay));
+      if (runs.get(term) !== token) return;
+      out.push(html);
+      body.innerHTML = out.join("\n") + ' <span class="caret"></span>';
+      const bar = body.querySelector(".bar[data-grow]");
+      if (bar) requestAnimationFrame(() => requestAnimationFrame(() => (bar.style.width = bar.dataset.grow)));
+      if (kind === "devices") {
+        segA.forEach((s, j) => j < 3 + i && s.classList.add("f"));
+        if (i >= 3) segB.forEach((s, j) => j < 2 + i && s.classList.add("f"));
+      }
+    }
+  }
 
   const io = new IntersectionObserver((entries) => entries.forEach((e) => {
-    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-  }), { rootMargin: "0px 0px -8% 0px" });
-  document.querySelectorAll(".reveal").forEach((el, i) => {
-    el.style.transitionDelay = `${Math.min(i % 4, 3) * 70}ms`;
-    io.observe(el);
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    if (e.target.classList.contains("rv")) e.target.classList.add("in");
+    if (e.target.dataset.demo) play(e.target);
+  }), { threshold: 0.2 });
+  document.querySelectorAll(".rv, .term[data-demo]").forEach((el) => io.observe(el));
+
+  document.querySelectorAll(".term").forEach((term) => {
+    term.querySelector(".replay").addEventListener("click", () => {
+      const on = term.querySelector("[data-tab].on");
+      play(term, on ? +on.dataset.tab : 0);
+    });
+    term.querySelectorAll("[data-tab]").forEach((tab) => tab.addEventListener("click", () => {
+      term.querySelectorAll("[data-tab]").forEach((t) => {
+        t.classList.toggle("on", t === tab);
+        t.setAttribute("aria-selected", String(t === tab));
+      });
+      play(term, +tab.dataset.tab);
+    }));
   });
+
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(b.dataset.copy);
+    } catch {
+      return; // clipboard blocked: the command is visible on the button
+    }
+    const ok = b.querySelector(".ok");
+    if (ok) { ok.hidden = false; setTimeout(() => (ok.hidden = true), 1400); return; }
+    const label = b.textContent;
+    b.textContent = "Copied";
+    setTimeout(() => (b.textContent = label), 1400);
+  }));
+
+  const links = [...document.querySelectorAll(".rail nav a")];
+  const spy = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  ["intro", "history", "agents", "computers", "install"].forEach((id) => spy.observe(document.getElementById(id)));
+})();
 </script>
 </body>
 </html>

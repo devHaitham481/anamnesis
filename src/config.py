@@ -12,7 +12,8 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 DEFAULT_CLAUDE_MODEL = "anthropic/claude-sonnet-5-5"
 DEFAULT_GEMINI_MODEL = "gemini/gemini-3.8-flash"
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
-DEFAULT_DATA_DIR = Path.home() / ".nexus-ai"
+DEFAULT_DATA_DIR = Path.home() / ".anamnesis"
+LEGACY_DATA_DIR = Path.home() / ".nexus-ai"  # before the rename to Anamnesis
 PROJECT_ENV = Path(__file__).resolve().parents[1] / ".env"
 
 
@@ -45,7 +46,7 @@ class Settings(BaseModel):
 
     @property
     def db_path(self) -> Path:
-        return self.data_dir / "nexus.db"
+        return self.data_dir / "anamnesis.db"
 
     @property
     def vector_path(self) -> Path:
@@ -84,30 +85,50 @@ def load_settings(
     env = {**file_values, **(os.environ if environ is None else environ)}
 
     def get(name: str) -> str | None:
-        value = env.get(name)
-        return value.strip() if value and value.strip() else None
+        # ANAMNESIS_* wins; the pre-rename NEXUS_* names still work.
+        for key in (name, name.replace("ANAMNESIS_", "NEXUS_", 1)):
+            value = env.get(key)
+            if value and value.strip():
+                return value.strip()
+        return None
 
     defaults = Settings()
+    data_dir = Path(get("ANAMNESIS_DATA_DIR") or DEFAULT_DATA_DIR).expanduser()
+    if environ is None and get("ANAMNESIS_DATA_DIR") is None:
+        migrate_legacy_data_dir(LEGACY_DATA_DIR, data_dir)
     return Settings(
         anthropic_api_key=_secret(env.get("ANTHROPIC_API_KEY")),
         gemini_api_key=_secret(env.get("GEMINI_API_KEY")),
-        claude_model=get("NEXUS_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
-        gemini_model=get("NEXUS_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
-        default_model=get("NEXUS_DEFAULT_MODEL") or defaults.default_model,
-        request_timeout=float(get("NEXUS_REQUEST_TIMEOUT") or defaults.request_timeout),
-        max_retries=int(get("NEXUS_MAX_RETRIES") or defaults.max_retries),
-        data_dir=Path(get("NEXUS_DATA_DIR") or DEFAULT_DATA_DIR).expanduser(),
-        embedding_model=get("NEXUS_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL,
-        rag_enabled=_bool(env.get("NEXUS_RAG"), defaults.rag_enabled),
-        rag_top_k=int(get("NEXUS_RAG_TOP_K") or defaults.rag_top_k),
-        rag_min_score=float(get("NEXUS_RAG_MIN_SCORE") or defaults.rag_min_score),
-        history_limit=int(get("NEXUS_HISTORY_LIMIT") or defaults.history_limit),
-        memory_sync=_bool(env.get("NEXUS_MEMORY_SYNC"), defaults.memory_sync),
+        claude_model=get("ANAMNESIS_CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL,
+        gemini_model=get("ANAMNESIS_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+        default_model=get("ANAMNESIS_DEFAULT_MODEL") or defaults.default_model,
+        request_timeout=float(get("ANAMNESIS_REQUEST_TIMEOUT") or defaults.request_timeout),
+        max_retries=int(get("ANAMNESIS_MAX_RETRIES") or defaults.max_retries),
+        data_dir=data_dir,
+        embedding_model=get("ANAMNESIS_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL,
+        rag_enabled=_bool(get("ANAMNESIS_RAG"), defaults.rag_enabled),
+        rag_top_k=int(get("ANAMNESIS_RAG_TOP_K") or defaults.rag_top_k),
+        rag_min_score=float(get("ANAMNESIS_RAG_MIN_SCORE") or defaults.rag_min_score),
+        history_limit=int(get("ANAMNESIS_HISTORY_LIMIT") or defaults.history_limit),
+        memory_sync=_bool(get("ANAMNESIS_MEMORY_SYNC"), defaults.memory_sync),
         memory_sync_interval=float(
-            get("NEXUS_MEMORY_SYNC_INTERVAL") or defaults.memory_sync_interval
+            get("ANAMNESIS_MEMORY_SYNC_INTERVAL") or defaults.memory_sync_interval
         ),
-        auth_token=_secret(env.get("NEXUS_AUTH_TOKEN")),
+        auth_token=_secret(get("ANAMNESIS_AUTH_TOKEN")),
         allowed_hosts=tuple(
-            h.strip() for h in (get("NEXUS_ALLOWED_HOSTS") or "").split(",") if h.strip()
+            h.strip() for h in (get("ANAMNESIS_ALLOWED_HOSTS") or "").split(",") if h.strip()
         ),
     )
+
+
+def migrate_legacy_data_dir(legacy: Path, target: Path) -> bool:
+    """Move a pre-rename `~/.nexus-ai` (and its `nexus.db`) to `~/.anamnesis`, once."""
+    if target.exists() or not legacy.is_dir():
+        return False
+    legacy.rename(target)
+    for old, new in (("nexus.db", "anamnesis.db"), ("nexus.log", "anamnesis.log")):
+        for suffix in ("", "-wal", "-shm"):
+            src = target / f"{old}{suffix}"
+            if src.exists():
+                src.rename(target / f"{new}{suffix}")
+    return True

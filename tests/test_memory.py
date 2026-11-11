@@ -121,7 +121,7 @@ async def test_old_database_is_migrated_in_place(tmp_path: Path) -> None:
     old.close()
     async with Database(path) as db:
         (t,) = await db.list_threads()
-        assert (t.title, t.source, t.project) == ("Old chat", "nexus", None)
+        assert (t.title, t.source, t.project) == ("Old chat", "anamnesis", None)
         assert [m.content for m in await db.get_messages("t1")] == ["hi"]
         thread, added = await db.import_conversation(conv("x", "imported text"), model="claude")
         assert len(added) == 1 and thread.source == "claude-code"
@@ -210,7 +210,7 @@ async def test_mcp_tools(service: ChatService) -> None:
             "s1",
             "we chose lancedb for local vector search",
             "because it is embedded",
-            project="/p/nexus",
+            project="/p/anamnesis",
             title="Vector store",
         )
     )
@@ -220,7 +220,7 @@ async def test_mcp_tools(service: ChatService) -> None:
     mcp_server._state["service"] = service
     try:
         found = _text(await server.call_tool("search_memory", {"query": "lancedb"}))
-        assert "Claude Code · /p/nexus" in found and "Vector store" in found
+        assert "Claude Code · /p/anamnesis" in found and "Vector store" in found
         assert thread.id in found
         none = _text(
             await server.call_tool("search_memory", {"query": "lancedb", "source": "chatgpt"})
@@ -231,9 +231,9 @@ async def test_mcp_tools(service: ChatService) -> None:
         convo = _text(await server.call_tool("get_conversation", {"thread_id": thread.id}))
         assert "because it is embedded" in convo
         saved = _text(
-            await server.call_tool("remember", {"note": "Use uv, not pip.", "topic": "nexus-ai"})
+            await server.call_tool("remember", {"note": "Use uv, not pip.", "topic": "anamnesis"})
         )
-        assert "Notes: nexus-ai" in saved
+        assert "Notes: anamnesis" in saved
         assert "Use uv" in _text(await server.call_tool("search_memory", {"query": "uv pip"}))
     finally:
         mcp_server._state.pop("service", None)
@@ -247,7 +247,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
     data = tmp_path / "data"
-    async with Database(data / "nexus.db") as db:
+    async with Database(data / "anamnesis.db") as db:
         await db.import_conversation(
             conv("s1", "the staging database lives in eu-west-1", title="Infra notes"), "claude"
         )
@@ -255,7 +255,11 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
         command=sys.executable,
         args=["-m", "src.memory_mcp"],
         cwd=str(tmp_path),  # not the project dir: must work from anywhere
-        env={"NEXUS_DATA_DIR": str(data), "NEXUS_RAG": "false", "NEXUS_MEMORY_SYNC": "false"},
+        env={
+            "ANAMNESIS_DATA_DIR": str(data),
+            "ANAMNESIS_RAG": "false",
+            "ANAMNESIS_MEMORY_SYNC": "false",
+        },
     )
     errlog = (tmp_path / "stderr.log").open("w")
     async with (
@@ -263,7 +267,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
         ClientSession(read, write) as session,
     ):
         init = await session.initialize()
-        assert init.server_info.name == "nexus-memory"
+        assert init.server_info.name == "anamnesis-memory"
         assert "search_memory" in (init.instructions or "")
         names = {t.name for t in (await session.list_tools()).tools}
         assert names == {"search_memory", "recent_conversations", "get_conversation", "remember"}
@@ -272,7 +276,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
         assert "eu-west-1" in text and "Infra notes" in text
         await session.call_tool("remember", {"note": "Prod runs on Fridays only."})
     errlog.close()
-    async with Database(data / "nexus.db") as db:
+    async with Database(data / "anamnesis.db") as db:
         assert await db.source_counts() == {"claude-code": 1, "note": 1}
 
 
@@ -300,16 +304,16 @@ def test_connect_json_tools_merge_and_back_up(fake_home: Path) -> None:
     t["gemini-cli"].connect()
     data = json.loads(gemini.read_text())
     assert data["theme"] == "dark" and "other" in data["mcpServers"]
-    assert data["mcpServers"]["nexus"]["args"] == ["-m", "src.memory_mcp"]
-    assert Path(data["mcpServers"]["nexus"]["command"]).is_absolute()
+    assert data["mcpServers"]["anamnesis"]["args"] == ["-m", "src.memory_mcp"]
+    assert Path(data["mcpServers"]["anamnesis"]["command"]).is_absolute()
     assert json.loads(gemini.with_name("settings.json.bak").read_text())["theme"] == "dark"
     assert t["gemini-cli"].connected()
     t["gemini-cli"].disconnect()
-    assert "nexus" not in json.loads(gemini.read_text())["mcpServers"]
+    assert "anamnesis" not in json.loads(gemini.read_text())["mcpServers"]
 
     cursor = fake_home / ".cursor" / "mcp.json"
     t["cursor"].connect()  # creates the file when missing
-    assert "nexus" in json.loads(cursor.read_text())["mcpServers"]
+    assert "anamnesis" in json.loads(cursor.read_text())["mcpServers"]
 
 
 def test_connect_codex_toml(fake_home: Path) -> None:
@@ -321,7 +325,7 @@ def test_connect_codex_toml(fake_home: Path) -> None:
     codex = targets()["codex"]
     codex.connect()
     parsed = tomllib.loads(cfg.read_text())
-    assert parsed["model"] == "gpt-5.5" and {"other", "nexus"} <= set(parsed["mcp_servers"])
+    assert parsed["model"] == "gpt-5.5" and {"other", "anamnesis"} <= set(parsed["mcp_servers"])
     assert codex.connect() == "already connected"
     codex.disconnect()
     parsed = tomllib.loads(cfg.read_text())

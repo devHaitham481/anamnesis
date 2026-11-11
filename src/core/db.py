@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS ingest_state (
 # Columns added after the first release; added in place on open (old databases keep working).
 _MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     "threads": [
-        ("source", "TEXT NOT NULL DEFAULT 'nexus'"),
+        ("source", "TEXT NOT NULL DEFAULT 'anamnesis'"),
         ("project", "TEXT"),
         ("external_id", "TEXT"),
     ],
@@ -77,6 +77,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_external ON threads(source, extern
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external ON messages(thread_id, external_id)
     WHERE external_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_threads_source ON threads(source, updated_at DESC);
+UPDATE threads SET source = 'anamnesis' WHERE source = 'nexus';  -- pre-rename native chats
 """
 
 _THREAD_COLS = (

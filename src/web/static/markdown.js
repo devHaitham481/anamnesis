@@ -75,5 +75,5 @@
     return out.join("");
   }
 
-  global.NexusMarkdown = { render: render, escapeHtml: escapeHtml };
+  global.AnamnesisMarkdown = { render: render, escapeHtml: escapeHtml };
 })(typeof window !== "undefined" ? window : globalThis);

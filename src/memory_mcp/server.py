@@ -1,6 +1,6 @@
 """Stdio MCP server: lets any MCP-capable agent search and add to the shared memory.
 
-Started by the client (e.g. `claude mcp add nexus -- nexus-mcp`). While it runs it also keeps
+Started by the client (e.g. `claude mcp add anamnesis -- anam-mcp`). While it runs it also keeps
 importing new history from the other tools in the background, so memory stays fresh.
 """
 
@@ -22,7 +22,7 @@ from src.core.models import SOURCE_LABELS, SearchHit, Thread
 log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-NexusAI is the user's shared, local memory of past conversations across all their AI tools
+Anamnesis is the user's shared, local memory of past conversations across all their AI tools
 (Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini, ...).
 - Call `search_memory` when the user refers to earlier work, decisions, preferences or anything
   "we discussed", or when starting a task where prior context could help. Search before asking
@@ -40,7 +40,7 @@ _state: dict[str, Any] = {}
 def _service() -> ChatService:
     service = _state.get("service")
     if service is None:
-        raise RuntimeError("NexusAI memory is still starting up; try again in a moment.")
+        raise RuntimeError("Anamnesis memory is still starting up; try again in a moment.")
     return service  # type: ignore[no-any-return]
 
 
@@ -116,8 +116,8 @@ def build_server(
                 await svc.close()
 
     server: MCPServer[Any] = MCPServer(
-        name="nexus-memory",
-        title="NexusAI shared memory",
+        name="anamnesis-memory",
+        title="Anamnesis shared memory",
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
     )
@@ -132,7 +132,7 @@ def build_server(
             query: What to look for, in natural language (e.g. "why we chose LanceDB").
             limit: Maximum number of results (1-25).
             source: Only one tool: claude-code, codex, gemini-cli, cursor, chatgpt,
-                claude-web, gemini-web, nexus or note.
+                claude-web, gemini-web, anamnesis or note.
             project: Only conversations from this project directory (absolute path).
         """
         hits = await _service().search(
@@ -170,7 +170,7 @@ def build_server(
 
         Args:
             note: Self-contained text worth recalling later (include the why).
-            topic: Optional grouping, e.g. a project name ("nexus-ai") or "preferences".
+            topic: Optional grouping, e.g. a project name ("anamnesis") or "preferences".
         """
         thread = await _service().remember(note, topic=topic)
         return f'Saved to "{thread.title}".'

@@ -9,9 +9,9 @@ from pydantic import BaseModel
 Role = Literal["system", "user", "assistant"]
 
 
-# Where a conversation came from. "nexus" = chatted inside NexusAI; everything else is imported.
+# Where a conversation came from. "anamnesis" = chatted inside Anamnesis; the rest are imported.
 SOURCE_LABELS: dict[str, str] = {
-    "nexus": "NexusAI",
+    "anamnesis": "Anamnesis chat",
     "note": "Memory note",
     "claude-code": "Claude Code",
     "codex": "Codex CLI",
@@ -30,7 +30,7 @@ class Thread(BaseModel):
     system_prompt: str | None = None
     created_at: float
     updated_at: float
-    source: str = "nexus"
+    source: str = "anamnesis"
     project: str | None = None
     external_id: str | None = None
 

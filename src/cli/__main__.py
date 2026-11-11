@@ -1,13 +1,13 @@
-"""`nexus` command line.
+"""`anam` command line.
 
-nexus                      open the terminal UI (memory browser + chat)
-nexus sync [--watch]       import new history from Claude Code, Codex, Gemini CLI, Cursor
-nexus import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data export
-nexus search QUERY         search all memory from the shell
-nexus connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = show status
-nexus disconnect TOOL
-nexus status               what is stored, per source
-nexus mcp                  run the MCP server (started for you by connected tools)
+anam                      open the terminal UI (memory browser + chat)
+anam sync [--watch]       import new history from Claude Code, Codex, Gemini CLI, Cursor
+anam import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data export
+anam search QUERY         search all memory from the shell
+anam connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = show status
+anam disconnect TOOL
+anam status               what is stored, per source
+anam mcp                  run the MCP server (started for you by connected tools)
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 from src.config import Settings, load_settings
 
 
-def _log_to_file(settings: Settings, name: str = "nexus.log") -> None:
+def _log_to_file(settings: Settings, name: str = "anamnesis.log") -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         filename=settings.data_dir / name,
@@ -72,7 +72,7 @@ def cmd_sync(settings: Settings, args: argparse.Namespace) -> int:
     async def run(service):  # type: ignore[no-untyped-def]
         with sync_lock(settings.data_dir) as acquired:
             if not acquired:
-                print("Another NexusAI process is syncing right now; try again shortly.")
+                print("Another Anamnesis process is syncing right now; try again shortly.")
                 return 1
             report = await scan(service, force=args.force, index=False)
             await exchange_with_devices(service, report)
@@ -138,7 +138,7 @@ def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
             total = await db.max_message_id()
         print(f"Memory: {settings.data_dir}")
         if not counts:
-            print("  (empty) run `nexus sync` to import your AI tools' history")
+            print("  (empty) run `anam sync` to import your AI tools' history")
         for source, n in counts.items():
             print(f"  {SOURCE_LABELS.get(source, source):<22} {n:>5} conversations")
         print(f"  {'messages (total)':<22} {total:>5}")
@@ -165,7 +165,7 @@ def cmd_connect(_: Settings, args: argparse.Namespace) -> int:
                 else "not installed"
             )
             print(f"  {t.name:<15} {t.label:<15} {state}")
-        print("\nConnect with: nexus connect <tool>   or   nexus connect all")
+        print("\nConnect with: anam connect <tool>   or   anam connect all")
         return 0
     if args.tool == "all":
         chosen = [t for t in all_targets.values() if t.installed()]
@@ -217,8 +217,8 @@ def cmd_share(settings: Settings, args: argparse.Namespace) -> int:
     print("\nPairing code (keep it private, it is the encryption key):\n")
     print(f"    {code}\n")
     print("On your other computer, once this folder has synced there:")
-    print(f"    nexus join {code}" + (f" {folder}" if args.folder else ""))
-    print("\nRun `nexus sync` (or just keep using your tools) to publish this computer's memory.")
+    print(f"    anam join {code}" + (f" {folder}" if args.folder else ""))
+    print("\nRun `anam sync` (or just keep using your tools) to publish this computer's memory.")
     return 0
 
 
@@ -233,7 +233,7 @@ def cmd_join(settings: Settings, args: argparse.Namespace) -> int:
         return 1
     print(f"Joined. Pulling memory from your other computers ({folder})…")
     code = cmd_sync(settings, argparse.Namespace(force=False, watch=False, interval=30.0))
-    print("\nNext: `nexus connect all` so this computer's AI tools can use the memory.")
+    print("\nNext: `anam connect all` so this computer's AI tools can use the memory.")
     return code
 
 
@@ -244,7 +244,7 @@ def cmd_devices(settings: Settings, _: argparse.Namespace) -> int:
 
     cfg = load_config(settings.data_dir)
     if cfg is None:
-        print("Memory sync is off. Turn it on with `nexus share` (or `nexus join CODE`).")
+        print("Memory sync is off. Turn it on with `anam share` (or `anam join CODE`).")
         return 0
     me = this_device(settings.data_dir)
     print(f"Synced via {cfg.folder}")
@@ -279,15 +279,15 @@ def cmd_mcp(_: Settings, __: argparse.Namespace) -> int:
 
 def cmd_tui(settings: Settings, _: argparse.Namespace) -> int:
     _log_to_file(settings)  # never log to the terminal while the TUI owns it
-    from src.cli.app import NexusApp
+    from src.cli.app import AnamnesisApp
 
-    NexusApp(settings).run()
+    AnamnesisApp(settings).run()
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="nexus", description="Shared local memory for all your AI tools."
+        prog="anam", description="Shared local memory for all your AI tools."
     )
     sub = parser.add_subparsers(dest="command")
     p = sub.add_parser("sync", help="import new history from local AI tools")
@@ -302,13 +302,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=8)
     p = sub.add_parser("connect", help="give AI tools access to memory via MCP")
     p.add_argument("tool", nargs="?")
-    p = sub.add_parser("disconnect", help="remove NexusAI from an AI tool")
+    p = sub.add_parser("disconnect", help="remove Anamnesis from an AI tool")
     p.add_argument("tool")
     p = sub.add_parser("share", help="sync memory across computers through a synced folder")
-    p.add_argument("folder", nargs="?", help="default: iCloud Drive/NexusAI")
+    p.add_argument("folder", nargs="?", help="default: iCloud Drive/Anamnesis")
     p = sub.add_parser("join", help="add this computer to memory shared from another one")
     p.add_argument("code")
-    p.add_argument("folder", nargs="?", help="default: iCloud Drive/NexusAI")
+    p.add_argument("folder", nargs="?", help="default: iCloud Drive/Anamnesis")
     sub.add_parser("devices", help="computers sharing this memory")
     sub.add_parser("unshare", help="stop syncing memory on this computer")
     sub.add_parser("status", help="what is stored, and which tools are connected")

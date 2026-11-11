@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nexus-ai"
+name = "anamnesis"
 version = "0.1.0"
 description = "Local-first unified multi-provider AI platform & CLI"
 requires-python = ">=3.11"
@@ -24,9 +24,9 @@ dependencies = [
 ]
 
 [project.scripts]
-nexus = "src.cli.__main__:main"
-nexus-web = "src.web.__main__:main"
-nexus-mcp = "src.memory_mcp.server:main"
+anam = "src.cli.__main__:main"
+anam-web = "src.web.__main__:main"
+anam-mcp = "src.memory_mcp.server:main"
 
 [project.optional-dependencies]
 dev = [

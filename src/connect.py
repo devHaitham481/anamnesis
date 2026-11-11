@@ -1,4 +1,4 @@
-"""Register NexusAI's MCP memory server with the AI tools installed on this machine.
+"""Register Anamnesis's MCP memory server with the AI tools installed on this machine.
 
 Every edit is a merge (other servers/settings are kept) and a `.bak` copy is written first.
 """
@@ -18,7 +18,7 @@ from typing import Any
 from src.ingest.codex import codex_home
 from src.ingest.cursor import cursor_user_dir
 
-SERVER_NAME = "nexus"
+SERVER_NAME = "anamnesis"
 
 
 def server_command() -> tuple[str, list[str]]:

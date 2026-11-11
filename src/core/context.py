@@ -8,7 +8,8 @@ from src.core.models import Message, SearchHit
 from src.providers.models import ChatMessage
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are NexusAI, a helpful assistant. Answer clearly and concisely; use Markdown when useful."
+    "You are Anamnesis, a helpful assistant. Answer clearly and concisely; "
+    "use Markdown when useful."
 )
 SNIPPET_CHARS = 600
 MAX_HISTORY_CHARS = 60_000

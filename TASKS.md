@@ -40,8 +40,8 @@
 - [x] Importers: Claude Code, Codex CLI, Gemini CLI, Cursor (local history, incremental).
 - [x] Importers: ChatGPT, claude.ai (also covers Claude Desktop chats), Gemini (Google Takeout) data exports.
 - [x] MCP server (`search_memory`, `recent_conversations`, `get_conversation`, `remember`).
-- [x] `nexus connect` registers the MCP server with Claude Code, Claude Desktop, Cursor, Gemini CLI and Codex.
+- [x] `anam connect` registers the MCP server with Claude Code, Claude Desktop, Cursor, Gemini CLI and Codex.
 - [x] Background sync in the MCP server, web server and TUI, with a cross-process lock.
-- [x] Memory browser: source badges and filters in the TUI and web UI, plus `nexus sync/import/search/status`.
-- [x] Cross-device memory: encrypted per-device logs in a synced folder (`nexus share` / `join` / `devices`).
+- [x] Memory browser: source badges and filters in the TUI and web UI, plus `anam sync/import/search/status`.
+- [x] Cross-device memory: encrypted per-device logs in a synced folder (`anam share` / `join` / `devices`).
 - [ ] Browser extension for live capture from ChatGPT / claude.ai / Gemini web (exports cover this for now).
