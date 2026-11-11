@@ -77,3 +77,20 @@ An independent review agent audited the codebase; all findings fixed with regres
 - **Search:** keyword search drops filler words. Previously "why did we pick X" matched every "why"/"we".
 - **Flaky TUI test fixed (pre-existing, ~1/12):** the poller and a finished reply could rebuild the sidebar concurrently. Rebuilds are now serialized by a lock.
 - Tests: 121 passed (3 runs). Ruff and mypy clean.
+
+## 2026-11-11 — Memory across computers
+
+**Goal (user):** any new computer, account or Claude Code instance automatically has the same memory. The user chose a synced folder (iCloud Drive by default) over a hosted relay for now.
+
+- **`src/core/devices.py`:** every device writes only its own subfolder of immutable segments (`000001.nxs`, …), each one a gzipped JSONL of conversations, AES-256-GCM encrypted with the device id as associated data.
+  - Other devices import the segments in order through the same idempotent upsert as local history, so a missing segment pauses that device's import rather than being skipped.
+  - Messages record their `origin` device, so received memory is never echoed back.
+  - Native threads get a stable cross-device `external_id`, so a chat continued on another computer merges into the same thread.
+- **Pairing:** the key exists only in the pairing code and in `~/.nexus-ai/sync.json` (mode 600). `meta.json` holds an HMAC check, so a wrong code is rejected. The tests check that the key never appears in the folder.
+- **Integration:** runs as part of every background sync (MCP server, web server, TUI) and `nexus sync`. iCloud placeholders are downloaded via `brctl`.
+- **Bug found by tests:** a corrupted later segment hid the messages already imported from earlier segments in the report. Progress is now reported per segment, alongside the error.
+- **Verified:**
+  - Unit tests cover two- and three-device flows, merges, echo-freedom, gaps, tampering and an unreachable folder.
+  - An end-to-end CLI run with two data dirs: share, then join, then search on the second computer.
+  - Tests: 126 passed (3 runs).
+- **Not yet:** deletions don't propagate across devices, and there is no hosted relay (the segment format is designed so one can be added without changes).

@@ -274,14 +274,16 @@ class ChatService:
     # ---------- shared memory: imports from other tools, notes ----------
 
     async def import_conversation(
-        self, conv: ImportedConversation, index: bool = True
+        self, conv: ImportedConversation, index: bool = True, origin: str | None = None
     ) -> tuple[Thread, int]:
         """Store a conversation from another tool and (optionally) embed its new messages.
 
         Bulk imports pass `index=False` and call `backfill_index()` once afterwards, so text is
         searchable by keyword immediately and semantic recall fills in as embedding proceeds.
         """
-        thread, added = await self.db.import_conversation(conv, model=self.default_model)
+        thread, added = await self.db.import_conversation(
+            conv, model=self.default_model, origin=origin
+        )
         if index:
             await self._index(added)
         return thread, len(added)

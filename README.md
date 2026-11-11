@@ -20,6 +20,23 @@ uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"
 
 After `connect`, restart the tool (or open a new session). Agents will use `search_memory` when you refer to earlier work, and `remember` to save decisions. While any connected tool is running, new conversations keep syncing in the background.
 
+### All your computers, one memory
+
+```bash
+nexus share                 # on your first computer: prints a pairing code
+nexus join XXXX-XXXX-…      # on each other computer (after installing NexusAI there)
+nexus connect all           # then give that computer's AI tools access
+```
+
+Memory syncs through a folder you already sync. The default is `iCloud Drive/NexusAI`; for Dropbox, Syncthing or anything else, pass a folder path to `share` and `join`.
+- **Private:** everything in the folder is end-to-end encrypted (AES-256-GCM). The key lives only in the pairing code, so the cloud provider sees nothing readable.
+- **No conflicts:** each computer writes only its own subfolder of small, immutable files, and reads everyone else's. Nothing can conflict or overwrite.
+- **Merging:** the same conversation or note topic continued on two computers merges into one thread.
+- **Always current:** a new computer gets the whole history on `join`. Running agents everywhere pick up other computers' memories within about a minute.
+- **Any AI account:** memory belongs to you, not to an AI account, so it doesn't matter which one you're logged into.
+
+`nexus devices` lists the computers; `nexus unshare` stops syncing this one.
+
 ### What gets imported
 
 | Tool | How | Where it reads from |
@@ -43,7 +60,9 @@ nexus import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
 nexus search QUERY         search everything from the shell  [--source chatgpt]
 nexus connect [TOOL|all]   claude-code, claude-desktop, cursor, gemini-cli, codex
 nexus disconnect TOOL
-nexus status               what is stored per tool, and which tools are connected
+nexus share [FOLDER]       sync memory across computers (prints a pairing code)
+nexus join CODE [FOLDER]   add this computer;  nexus devices / nexus unshare
+nexus status               what is stored per tool, sync state, connected tools
 nexus mcp                  the MCP server (connected tools start it for you)
 ```
 

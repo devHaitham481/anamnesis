@@ -45,10 +45,18 @@ def _print_report(report) -> None:  # type: ignore[no-untyped-def]
     from src.core.models import SOURCE_LABELS
 
     if report.messages_added:
-        per = ", ".join(f"{SOURCE_LABELS.get(k, k)}: {v}" for k, v in report.by_source.items())
+
+        def label(k: str) -> str:
+            if k.startswith("device:"):
+                return f"from {k.removeprefix('device:')}"
+            return SOURCE_LABELS.get(k, k)
+
+        per = ", ".join(f"{label(k)}: {v}" for k, v in report.by_source.items())
         print(f"Imported {report.messages_added} new messages ({per}).")
-    else:
+    elif not report.shared:
         print("Memory is up to date.")
+    if report.shared:
+        print(f"Shared {report.shared} messages with your other computers.")
     for err in report.errors:
         print(f"  warning: {err}", file=sys.stderr)
 
@@ -59,14 +67,16 @@ def _progress(done: int, total: int) -> None:
 
 
 def cmd_sync(settings: Settings, args: argparse.Namespace) -> int:
-    from src.ingest.runner import scan, sync_lock, watch
+    from src.ingest.runner import exchange_with_devices, scan, sync_lock, watch
 
     async def run(service):  # type: ignore[no-untyped-def]
         with sync_lock(settings.data_dir) as acquired:
             if not acquired:
                 print("Another NexusAI process is syncing right now; try again shortly.")
                 return 1
-            _print_report(await scan(service, force=args.force, index=False))
+            report = await scan(service, force=args.force, index=False)
+            await exchange_with_devices(service, report)
+            _print_report(report)
             await service.backfill_index(progress=_progress)
         if args.watch:
             print(f"Watching for new conversations every {args.interval:.0f}s (Ctrl+C to stop)…")
@@ -135,6 +145,8 @@ def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
 
     asyncio.run(run())
     print()
+    cmd_devices(settings, argparse.Namespace())
+    print()
     return cmd_connect(settings, argparse.Namespace(tool=None))
 
 
@@ -186,6 +198,78 @@ def cmd_disconnect(_: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _folder(value: str | None) -> Path:
+    from src.core.devices import default_folder
+
+    return Path(value).expanduser().resolve() if value else default_folder()
+
+
+def cmd_share(settings: Settings, args: argparse.Namespace) -> int:
+    from src.core.devices import SyncSetupError, share
+
+    folder = _folder(args.folder)
+    try:
+        code = share(settings.data_dir, folder)
+    except SyncSetupError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    print(f"Memory sync is on. Folder: {folder}")
+    print("\nPairing code (keep it private, it is the encryption key):\n")
+    print(f"    {code}\n")
+    print("On your other computer, once this folder has synced there:")
+    print(f"    nexus join {code}" + (f" {folder}" if args.folder else ""))
+    print("\nRun `nexus sync` (or just keep using your tools) to publish this computer's memory.")
+    return 0
+
+
+def cmd_join(settings: Settings, args: argparse.Namespace) -> int:
+    from src.core.devices import SyncSetupError, join
+
+    folder = _folder(args.folder)
+    try:
+        join(settings.data_dir, folder, args.code)
+    except SyncSetupError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    print(f"Joined. Pulling memory from your other computers ({folder})…")
+    code = cmd_sync(settings, argparse.Namespace(force=False, watch=False, interval=30.0))
+    print("\nNext: `nexus connect all` so this computer's AI tools can use the memory.")
+    return code
+
+
+def cmd_devices(settings: Settings, _: argparse.Namespace) -> int:
+    import datetime as dt
+
+    from src.core.devices import list_devices, load_config, this_device
+
+    cfg = load_config(settings.data_dir)
+    if cfg is None:
+        print("Memory sync is off. Turn it on with `nexus share` (or `nexus join CODE`).")
+        return 0
+    me = this_device(settings.data_dir)
+    print(f"Synced via {cfg.folder}")
+    for d in list_devices(cfg):
+        when = (
+            dt.datetime.fromtimestamp(d["last_write"]).strftime("%Y-%m-%d %H:%M")
+            if d["last_write"]
+            else "never"
+        )
+        mark = "  (this computer)" if d["id"] == me.id else ""
+        print(f"  {d['name']:<24} last update {when}{mark}")
+    return 0
+
+
+def cmd_unshare(settings: Settings, _: argparse.Namespace) -> int:
+    from src.core.devices import disable
+
+    print(
+        "Memory sync turned off for this computer."
+        if disable(settings.data_dir)
+        else "Memory sync was not on."
+    )
+    return 0
+
+
 def cmd_mcp(_: Settings, __: argparse.Namespace) -> int:
     from src.memory_mcp.server import main as mcp_main
 
@@ -220,6 +304,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("tool", nargs="?")
     p = sub.add_parser("disconnect", help="remove NexusAI from an AI tool")
     p.add_argument("tool")
+    p = sub.add_parser("share", help="sync memory across computers through a synced folder")
+    p.add_argument("folder", nargs="?", help="default: iCloud Drive/NexusAI")
+    p = sub.add_parser("join", help="add this computer to memory shared from another one")
+    p.add_argument("code")
+    p.add_argument("folder", nargs="?", help="default: iCloud Drive/NexusAI")
+    sub.add_parser("devices", help="computers sharing this memory")
+    sub.add_parser("unshare", help="stop syncing memory on this computer")
     sub.add_parser("status", help="what is stored, and which tools are connected")
     sub.add_parser("mcp", help="run the MCP server on stdio")
     sub.add_parser("tui", help="open the terminal UI (default)")
@@ -233,6 +324,10 @@ COMMANDS = {
     "connect": cmd_connect,
     "disconnect": cmd_disconnect,
     "status": cmd_status,
+    "share": cmd_share,
+    "join": cmd_join,
+    "devices": cmd_devices,
+    "unshare": cmd_unshare,
     "mcp": cmd_mcp,
     "tui": cmd_tui,
     None: cmd_tui,

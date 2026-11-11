@@ -23,6 +23,7 @@ class ScanReport:
     files_parsed: int = 0
     conversations: int = 0
     messages_added: int = 0
+    shared: int = 0  # messages published to other computers (cross-device sync)
     errors: list[str] = field(default_factory=list)
     by_source: dict[str, int] = field(default_factory=dict)
 
@@ -141,8 +142,22 @@ async def sync_once(service: ChatService, sources: Sequence[Source] | None = Non
         if not acquired:
             return ScanReport()
         report = await scan(service, sources, index=False)
+        await exchange_with_devices(service, report)
         await service.backfill_index()  # also catches up on anything left from earlier runs
         return report
+
+
+async def exchange_with_devices(service: ChatService, report: ScanReport) -> None:
+    """If cross-device sync is on, publish local memory and import other devices' memory."""
+    from src.core.devices import exchange
+
+    result = await exchange(service)
+    report.shared += result.exported
+    report.messages_added += result.imported
+    for name, n in result.from_devices.items():
+        key = f"device:{name}"
+        report.by_source[key] = report.by_source.get(key, 0) + n
+    report.errors += result.errors
 
 
 async def watch(

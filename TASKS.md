@@ -43,4 +43,5 @@
 - [x] `nexus connect` registers the MCP server with Claude Code, Claude Desktop, Cursor, Gemini CLI and Codex.
 - [x] Background sync in the MCP server, web server and TUI, with a cross-process lock.
 - [x] Memory browser: source badges and filters in the TUI and web UI, plus `nexus sync/import/search/status`.
+- [x] Cross-device memory: encrypted per-device logs in a synced folder (`nexus share` / `join` / `devices`).
 - [ ] Browser extension for live capture from ChatGPT / claude.ai / Gemini web (exports cover this for now).

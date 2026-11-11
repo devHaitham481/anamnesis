@@ -68,7 +68,8 @@ _MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("project", "TEXT"),
         ("external_id", "TEXT"),
     ],
-    "messages": [("external_id", "TEXT")],
+    # origin: id of the device a message was synced from (NULL = created on this device).
+    "messages": [("external_id", "TEXT"), ("origin", "TEXT")],
 }
 _POST_MIGRATION = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_external ON threads(source, external_id)
@@ -388,7 +389,7 @@ class Database:
     # ---------- imports from other tools ----------
 
     async def import_conversation(
-        self, conv: ImportedConversation, model: str
+        self, conv: ImportedConversation, model: str, origin: str | None = None
     ) -> tuple[Thread, list[Message]]:
         """Upsert a conversation from another tool; returns the thread and only NEW messages.
 
@@ -427,7 +428,7 @@ class Database:
             for m in msgs:
                 cur = await conn.execute(
                     "INSERT OR IGNORE INTO messages(thread_id, role, content, provider, model, "
-                    "created_at, external_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "created_at, external_id, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         thread_id,
                         m.role,
@@ -436,6 +437,7 @@ class Database:
                         m.model,
                         m.created_at,
                         m.external_id,
+                        origin,
                     ),
                 )
                 if cur.rowcount and cur.lastrowid is not None:
@@ -457,6 +459,46 @@ class Database:
                     (title, conv.project, last, thread_id),
                 )
         return await self.get_thread(thread_id), added
+
+    async def local_changes_after(
+        self, after_id: int, limit: int = 1000
+    ) -> list[tuple[Thread, Message, str | None]]:
+        """Messages created on THIS device after `after_id` (for cross-device sync export).
+
+        Returns (thread, message, message_external_id). Messages that arrived from other
+        devices (origin set) are excluded so they are never echoed back.
+        """
+        rows = await self._fetchall(
+            f"SELECT m.id AS mid, m.role, m.content, m.provider, m.model AS mmodel, "
+            f"m.created_at AS mcreated, m.external_id AS mext, "
+            f"{', '.join('t.' + c.strip() for c in _THREAD_COLS.split(','))} "
+            "FROM messages m JOIN threads t ON t.id = m.thread_id "
+            "WHERE m.id > ? AND m.origin IS NULL ORDER BY m.id LIMIT ?",
+            (after_id, limit),
+        )
+        out: list[tuple[Thread, Message, str | None]] = []
+        for r in rows:
+            thread = Thread(**{c.strip(): r[c.strip()] for c in _THREAD_COLS.split(",")})
+            msg = Message(
+                id=r["mid"],
+                thread_id=thread.id,
+                role=r["role"],
+                content=r["content"],
+                provider=r["provider"],
+                model=r["mmodel"],
+                created_at=r["mcreated"],
+            )
+            out.append((thread, msg, r["mext"]))
+        return out
+
+    async def ensure_external_id(self, thread_id: str, external_id: str) -> str:
+        """Give a native thread a stable cross-device key (kept if it already has one)."""
+        async with self._write() as conn:
+            await conn.execute(
+                "UPDATE threads SET external_id = ? WHERE id = ? AND external_id IS NULL",
+                (external_id, thread_id),
+            )
+        return (await self.get_thread(thread_id)).external_id or external_id
 
     async def get_ingest_signature(self, path: str) -> str | None:
         rows = await self._fetchall("SELECT signature FROM ingest_state WHERE path = ?", (path,))

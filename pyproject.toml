@@ -20,6 +20,7 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "mcp>=2.3,<3",
     "zstandard>=0.22",
+    "cryptography>=42",
 ]
 
 [project.scripts]
