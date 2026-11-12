@@ -3,90 +3,163 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anamnesis — one local memory for all your AI tools</title>
-<meta name="description" content="Anamnesis imports your Claude Code, Codex, Cursor, Gemini and ChatGPT history into one local database and gives every agent access to it over MCP.">
+<title>Anamnesis — one memory for all your AI tools</title>
+<meta name="description" content="Open-source, self-hosted memory shared by Claude Code, Codex, Cursor, Gemini CLI, claude.ai and ChatGPT. Every agent can search what you worked out in any of them.">
+<meta property="og:title" content="Anamnesis — one memory for all your AI tools">
+<meta property="og:description" content="Open-source, self-hosted memory shared by every AI tool you use.">
+<meta name="theme-color" content="#faf9f6">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23b0532d'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23faf9f6'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #faf9f6; --fg: #1c1a17; --muted: #6b665e; --line: #e4e0d8;
-    --accent: #b0532d; --code-bg: #f1eee8; --gutter: 24px;
+    --accent: #b0532d; --code-bg: #f1eee8; --card: #ffffff; --gutter: 24px;
     --sans: "Inter", system-ui, -apple-system, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #141311; --fg: #ece8e1; --muted: #9a948a; --line: #2a2825; --accent: #e07a4f; --code-bg: #1d1b19; }
+    :root { --bg: #141311; --fg: #ece8e1; --muted: #9a948a; --line: #2a2825;
+      --accent: #e07a4f; --code-bg: #1d1b19; --card: #1a1917; }
   }
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-underline-offset: 3px; }
   code, pre { font-family: var(--mono); font-size: 14px; }
+  p code, li code, td code, summary code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
 
-  .wrap { width: min(1100px, 100% - 2 * var(--gutter)); margin: 0 auto; }
+  .wrap { width: min(1080px, 100% - 2 * var(--gutter)); margin: 0 auto; }
 
-  header { border-bottom: 1px solid var(--line); }
+  /* header */
+  header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
   header .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
-  .logo { font-weight: 600; text-decoration: none; }
+  .logo { font-weight: 600; text-decoration: none; letter-spacing: -0.01em; }
   .logo span { color: var(--accent); }
-  header nav { display: flex; gap: 24px; font-size: 14px; color: var(--muted); }
+  header nav { display: flex; align-items: center; gap: 24px; font-size: 14px; color: var(--muted); }
   header nav a { text-decoration: none; }
   header nav a:hover { color: var(--fg); }
+  header nav .gh { color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; }
+  header nav .gh:hover { border-color: var(--muted); }
 
-  section { border-bottom: 1px solid var(--line); padding: 72px 0; }
+  section { border-bottom: 1px solid var(--line); padding: 80px 0; }
+  h2 { font-size: clamp(24px, 3vw, 30px); line-height: 1.2; letter-spacing: -0.015em; font-weight: 600; margin: 0 0 12px; }
+  .kicker { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+  .intro { color: var(--muted); font-size: 17px; max-width: 38em; margin: 0 0 40px; }
 
-  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; }
-  h1 { font-size: clamp(32px, 4.4vw, 48px); line-height: 1.1; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 20px; }
-  .lede { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+  /* hero */
+  .hero { padding: 88px 0 80px; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: center; }
+  h1 { font-size: clamp(36px, 5vw, 54px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 600; margin: 0 0 20px; }
+  .lede { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 32em; }
+  .meta { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
 
-  .install { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 10px 14px; max-width: 420px; }
-  .install code { overflow-x: auto; white-space: nowrap; }
-  .install code::before { content: "$ "; color: var(--muted); }
-  .copy { font: 500 12px var(--sans); color: var(--muted); background: var(--bg); border: 1px solid var(--line);
-    border-radius: 6px; padding: 4px 10px; cursor: pointer; flex: none; }
+  /* command blocks */
+  .cmd { position: relative; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 64px 12px 14px; }
+  .cmd pre { margin: 0; overflow-x: auto; line-height: 1.75; }
+  .cmd .l { display: block; white-space: pre; }
+  .cmd .l::before { content: "$ "; color: var(--muted); user-select: none; }
+  .cmd .c { display: block; white-space: pre; color: var(--muted); }
+  .copy { position: absolute; top: 9px; right: 9px; font: 500 12px var(--sans); color: var(--muted);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
   .copy:hover { color: var(--fg); border-color: var(--muted); }
 
-  pre.term { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
-    padding: 20px; line-height: 1.7; overflow-x: auto; }
+  /* terminal demo */
+  .term { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 12px 32px -12px rgb(0 0 0 / 12%); }
+  .term .bar { display: flex; gap: 6px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .term .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .term pre { margin: 0; padding: 18px 20px 20px; line-height: 1.75; overflow-x: auto; font-size: 13.5px; }
   .term .p { color: var(--muted); }
   .term .a { color: var(--accent); }
+  .term .d { color: var(--muted); }
+  .term .q { font-weight: 500; }
 
-  h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 28px; }
+  /* sources */
+  .sources { padding: 40px 0; }
+  .src-rows { display: grid; gap: 14px; }
+  .src-row { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: baseline; }
+  .src-row > span { font-size: 13px; color: var(--muted); }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .pills li { border: 1px solid var(--line); border-radius: 999px; padding: 4px 13px; font-size: 14px; }
 
-  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
-  .grid h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
-  .grid p { margin: 0; color: var(--muted); }
+  /* steps */
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+  .num { font: 500 13px var(--mono); color: var(--accent); }
+  .grid3 h3 { font-size: 17px; font-weight: 600; margin: 6px 0 6px; }
+  .grid3 p { margin: 0; color: var(--muted); }
 
+  /* node diagram */
+  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center; gap: 12px; margin: 0 0 48px; }
+  .box { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 16px 18px; }
+  .box b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .box small { color: var(--muted); font-size: 13.5px; }
+  .box.mid { border-color: var(--accent); }
+  .box.mid b { color: var(--accent); }
+  .link { text-align: center; font-size: 12px; color: var(--muted); line-height: 1.3; min-width: 96px; }
+  .link::before { content: ""; display: block; height: 1px; background: var(--muted); margin: 0 4px 6px; opacity: 0.6; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .steps h3 { font-size: 16px; font-weight: 600; margin: 6px 0 4px; }
+  .steps p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+  .steps .cmd + .cmd { margin-top: 8px; }
+  .or { font-size: 13px; color: var(--muted); margin: 8px 0; }
+  .fine { margin: 28px 0 0; font-size: 14px; color: var(--muted); }
+
+  /* privacy */
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 48px; }
+  .grid2 h3 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .grid2 p { margin: 0; color: var(--muted); }
+
+  /* commands */
   table { width: 100%; border-collapse: collapse; }
-  td { padding: 12px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td { padding: 11px 0; border-top: 1px solid var(--line); vertical-align: top; }
   tr:first-child td { border-top: 0; }
-  td:first-child { width: 38%; padding-right: 24px; }
+  td:first-child { width: 36%; padding-right: 24px; white-space: nowrap; }
+  td:first-child code { background: none; padding: 0; font-size: 14px; }
   td:last-child { color: var(--muted); }
 
-  .sources { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .sources li { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 14px; }
-  .sources li small { color: var(--muted); font-size: 12px; margin-left: 4px; }
+  /* faq */
+  details { border-top: 1px solid var(--line); padding: 16px 0; }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--muted); font-weight: 400; }
+  details[open] summary::after { content: "–"; }
+  details p { margin: 10px 0 0; color: var(--muted); max-width: 46em; }
 
-  .note { margin: 0; max-width: 40em; }
+  /* closing */
+  .cta { text-align: center; border-bottom: 0; }
+  .cta .cmd { max-width: 560px; margin: 28px auto 0; text-align: left; }
 
-  footer { padding: 32px 0 48px; font-size: 14px; color: var(--muted); }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 44px; font-size: 14px; color: var(--muted); }
   footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer nav { display: flex; gap: 20px; }
 
-  @media (max-width: 860px) {
+  @media (max-width: 900px) {
     .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 40px; }
-    .grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-    section { padding: 56px 0; }
+    .grid3, .steps { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .flow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .link { min-width: 0; display: flex; align-items: center; gap: 10px; justify-content: center; padding: 4px 0; }
+    .link::before { width: 1px; height: 18px; margin: 0; }
+    section { padding: 64px 0; }
   }
-  @media (max-width: 560px) {
+  @media (max-width: 600px) {
     :root { --gutter: 16px; }
-    header nav a:not(:last-child) { display: none; }
+    header nav a:not(.gh) { display: none; }
+    .hero { padding: 56px 0; }
     .lede { font-size: 17px; }
-    pre.term { padding: 16px; font-size: 12.5px; }
+    .term pre { padding: 14px; font-size: 12px; }
+    .src-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .grid2 { grid-template-columns: minmax(0, 1fr); }
     table, tbody, tr, td { display: block; width: 100% !important; }
-    td { padding: 0; border: 0 !important; }
-    tr { padding: 12px 0; border-top: 1px solid var(--line); }
+    td { padding: 0; border: 0 !important; white-space: normal !important; }
+    tr { padding: 11px 0; border-top: 1px solid var(--line); }
     tr:first-child { border-top: 0; }
   }
 </style>
@@ -98,8 +171,10 @@
     <a class="logo" href="#">anamnesis<span>.</span></a>
     <nav>
       <a href="#how">How it works</a>
-      <a href="#commands">Commands</a>
-      <a href="#">GitHub</a>
+      <a href="#node">Web &amp; mobile</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/devHaitham481/anamnesis">GitHub</a>
     </nav>
   </div>
 </header>
@@ -109,77 +184,183 @@
     <div class="wrap">
       <div>
         <h1>One memory for all your AI tools.</h1>
-        <p class="lede">Anamnesis imports your history from Claude Code, Codex, Cursor, Gemini and ChatGPT into one local database, then lets every agent search it over MCP.</p>
-        <div class="install">
-          <code>pip install -e . &amp;&amp; anam sync</code>
-          <button class="copy" data-copy="pip install -e . && anam sync">Copy</button>
+        <p class="lede">What you worked out in ChatGPT, Claude Code already knows. Anamnesis collects your conversations from every AI tool into one private memory that all of them can search.</p>
+        <div class="cmd">
+          <pre><code><span class="l">git clone https://github.com/devHaitham481/anamnesis</span><span class="l">cd anamnesis && uv tool install -e .</span><span class="l">anam sync && anam connect all</span></code></pre>
+          <button class="copy">Copy</button>
         </div>
+        <p class="meta">Open source · self-hosted · no account · Python 3.11+</p>
       </div>
-<pre class="term"><span class="p">$</span> anam sync
-imported 44 conversations, 5,906 messages
+      <div class="term" aria-label="Example: Claude Code recalling a decision made in ChatGPT">
+        <div class="bar"><i></i><i></i><i></i></div>
+<pre><span class="p">$</span> anam sync
+<span class="a">✓</span> 4 tools · 212 conversations · 18,406 messages
 
-<span class="p">$</span> anam connect claude-code
-<span class="a">✓</span> claude-code connected
+<span class="p">$</span> claude
+<span class="p">&gt;</span> <span class="q">why did we pick session cookies over JWT?</span>
 
-<span class="p">$</span> anam search "why did we drop redis"
-<span class="a">codex</span> · api-server · Mar 4
-  Redis only held sessions; moved them to SQLite…</pre>
+<span class="a">●</span> search_memory(<span class="d">"session cookies vs JWT"</span>)
+  <span class="d">ChatGPT · api-server · Mar 4</span>
+  <span class="d">"…we need instant revocation, so server-side</span>
+  <span class="d"> sessions; JWT would mean a denylist anyway."</span>
+
+You decided this in ChatGPT on March 4: you
+needed instant revocation, and JWTs would have
+required a denylist anyway.</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="sources" aria-label="Supported tools">
+    <div class="wrap src-rows">
+      <div class="src-row">
+        <span>Synced automatically</span>
+        <ul class="pills"><li>Claude Code</li><li>Codex CLI</li><li>Gemini CLI</li><li>Cursor</li></ul>
+      </div>
+      <div class="src-row">
+        <span>Live, through your node</span>
+        <ul class="pills"><li>claude.ai</li><li>ChatGPT</li><li>their desktop &amp; mobile apps</li></ul>
+      </div>
+      <div class="src-row">
+        <span>Imported from exports</span>
+        <ul class="pills"><li>ChatGPT</li><li>claude.ai</li><li>Gemini</li></ul>
+      </div>
     </div>
   </section>
 
   <section id="how">
     <div class="wrap">
-      <h2>How it works</h2>
-      <div class="grid">
+      <p class="kicker">How it works</p>
+      <h2>It is only the memory.</h2>
+      <p class="intro">Anamnesis never calls a model and isn't another chat app. You keep using the tools you already use; they just stop forgetting.</p>
+      <div class="grid3">
         <div>
-          <h3>Import</h3>
-          <p>Reads the transcripts your AI tools already keep on disk. Re-running only picks up what changed.</p>
+          <span class="num">01</span>
+          <h3>Collect</h3>
+          <p>Reads the transcripts your AI tools already keep on disk, in the background, picking up only what changed.</p>
         </div>
         <div>
-          <h3>Search</h3>
-          <p>Keyword and semantic search with local embeddings. Filter by tool or project.</p>
+          <span class="num">02</span>
+          <h3>Recall</h3>
+          <p>Every agent gets an MCP server with <code>search_memory</code>: keyword and semantic search, run locally, filterable by tool or project.</p>
         </div>
         <div>
-          <h3>Share</h3>
-          <p>An MCP server gives every connected agent the same memory. Optional encrypted sync between your computers.</p>
+          <span class="num">03</span>
+          <h3>Remember</h3>
+          <p>Agents save decisions with <code>remember</code>. A note written in Cursor is there the next time you open Claude Code.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section>
+  <section id="node">
     <div class="wrap">
-      <h2>Sources</h2>
-      <ul class="sources">
-        <li>Claude Code</li>
-        <li>Codex CLI</li>
-        <li>Gemini CLI</li>
-        <li>Cursor</li>
-        <li>ChatGPT <small>export</small></li>
-        <li>claude.ai <small>export</small></li>
-        <li>Gemini <small>Takeout</small></li>
-      </ul>
+      <p class="kicker">Web &amp; mobile</p>
+      <h2>Your memory in claude.ai and ChatGPT, even while your laptop sleeps.</h2>
+      <p class="intro">Run a small node: your own always-on copy of the memory, on a server you control. Web and mobile apps reach it as a connector, and it keeps all your computers in sync.</p>
+
+      <div class="flow" aria-label="Your computers sync to your node; claude.ai and ChatGPT connect to it">
+        <div class="box"><b>Your computers</b><small>Claude Code, Codex, Cursor, Gemini CLI</small></div>
+        <div class="link">end-to-end<br>encrypted sync</div>
+        <div class="box mid"><b>Your node</b><small>Fly.io, a VPS, a NAS, a home server</small></div>
+        <div class="link">MCP connector<br>with sign-in</div>
+        <div class="box"><b>Web &amp; mobile</b><small>claude.ai and ChatGPT, on any device</small></div>
+      </div>
+
+      <div class="steps">
+        <div>
+          <span class="num">01</span>
+          <h3>Deploy it once</h3>
+          <p>One command on Fly.io, or Docker anywhere. HTTPS included.</p>
+          <div class="cmd"><pre><code><span class="l">anam node deploy fly</span></code></pre><button class="copy">Copy</button></div>
+          <p class="or">or, on your own server</p>
+          <div class="cmd"><pre><code><span class="l">docker compose up -d</span></code></pre><button class="copy">Copy</button></div>
+        </div>
+        <div>
+          <span class="num">02</span>
+          <h3>Link your computers</h3>
+          <p>Enter the node password and choose what to upload: everything, all but some projects, or only notes.</p>
+          <div class="cmd"><pre><code><span class="l">anam node link https://your-node</span></code></pre><button class="copy">Copy</button></div>
+        </div>
+        <div>
+          <span class="num">03</span>
+          <h3>Add the connector</h3>
+          <p>Paste <code>your-node/mcp</code> into claude.ai or ChatGPT and sign in. Choose search-only or search and save.</p>
+          <div class="cmd"><pre><code><span class="l">anam connect claude-web</span></code></pre><button class="copy">Copy</button></div>
+        </div>
+      </div>
+      <p class="fine">Custom connectors need a paid claude.ai or ChatGPT plan. Only need your computers in sync? A folder you already sync (iCloud, Dropbox, Syncthing) works too, with <code>anam share</code>.</p>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap">
+      <p class="kicker">Privacy</p>
+      <h2>Yours, on hardware you choose.</h2>
+      <p class="intro">There is no Anamnesis cloud and no account. Your memory lives in <code>~/.anamnesis</code> and, if you run one, on your node.</p>
+      <div class="grid2">
+        <div><h3>Local by default</h3><p>SQLite plus a local embedding model. No API keys, no telemetry. The only download is the embedding model on first run.</p></div>
+        <div><h3>End-to-end encrypted sync</h3><p>Sync data is encrypted with AES-256-GCM before it leaves your computer, with a key only your devices and your node hold.</p></div>
+        <div><h3>Apps never see your password</h3><p>Web apps get revocable OAuth tokens. Give them search-only or search-and-save access.</p></div>
+        <div><h3>See every access</h3><p><code>anam node activity</code> lists each search and save an app made. <code>anam node revoke</code> cuts one off.</p></div>
+      </div>
     </div>
   </section>
 
   <section id="commands">
     <div class="wrap">
-      <h2>Commands</h2>
+      <p class="kicker">Commands</p>
+      <h2>Everything from one CLI.</h2>
+      <p class="intro">Plus a terminal UI (<code>anam</code>) and a web UI (<code>anam-web</code>) to browse and search everything.</p>
       <table>
-        <tr><td><code>anam sync</code></td><td>Import new history from local AI tools</td></tr>
-        <tr><td><code>anam import &lt;files&gt;</code></td><td>Import ChatGPT, claude.ai or Gemini exports</td></tr>
-        <tr><td><code>anam search &lt;query&gt;</code></td><td>Search memory</td></tr>
-        <tr><td><code>anam connect [tool]</code></td><td>Register the MCP server with Claude Code, Claude Desktop, Cursor, Gemini CLI or Codex. Configs are backed up first.</td></tr>
-        <tr><td><code>anam share</code> · <code>anam join</code></td><td>Sync memory across computers through iCloud or any synced folder</td></tr>
+        <tr><td><code>anam sync</code></td><td>Import new history from your local AI tools</td></tr>
+        <tr><td><code>anam connect [tool]</code></td><td>Give Claude Code, Claude Desktop, Cursor, Gemini CLI or Codex access. Configs are backed up first.</td></tr>
+        <tr><td><code>anam search &lt;query&gt;</code></td><td>Search memory from the terminal</td></tr>
+        <tr><td><code>anam import &lt;files&gt;</code></td><td>Import ChatGPT, claude.ai or Gemini data exports</td></tr>
+        <tr><td><code>anam node …</code></td><td><code>deploy</code>, <code>link</code>, <code>scope</code>, <code>status</code>, <code>activity</code>, <code>revoke</code>, <code>wipe</code></td></tr>
         <tr><td><code>anam status</code></td><td>What is stored and which tools are connected</td></tr>
       </table>
     </div>
   </section>
 
-  <section>
+  <section id="faq">
     <div class="wrap">
-      <h2>Privacy</h2>
-      <p class="note">Everything lives in <code>~/.anamnesis</code> on your machine. No account, no server. Sync files are encrypted before they leave your computer.</p>
+      <p class="kicker">FAQ</p>
+      <h2>Questions</h2>
+      <details>
+        <summary>Does my data go anywhere?</summary>
+        <p>Not unless you set up sync. Without a node, everything stays on your machine. With a node, it goes to your own server, encrypted in transit. The node must read your memory to search it, which is why it runs on hardware you control.</p>
+      </details>
+      <details>
+        <summary>What does a node cost?</summary>
+        <p>About one small machine. On Fly.io the default is 1 shared CPU, 1 GB of memory and a 1 GB volume; it stops when idle and wakes on the next request. A VPS or home server you already have costs nothing extra.</p>
+      </details>
+      <details>
+        <summary>What about Gemini on the web?</summary>
+        <p>Gemini doesn't support custom connectors yet, so it can't read the memory live. You can still import its history from Google Takeout with <code>anam import</code>.</p>
+      </details>
+      <details>
+        <summary>How do agents know when to use it?</summary>
+        <p>The MCP server describes its tools to them. Refer to earlier work ("what did we decide about auth?") and they search. They can also save decisions with <code>remember</code>, or you can ask them to.</p>
+      </details>
+      <details>
+        <summary>Can I keep some projects out?</summary>
+        <p>Yes. Each computer chooses what it uploads to the node: everything, everything except listed project folders, or only saved notes. Change it any time with <code>anam node scope</code>.</p>
+      </details>
+      <details>
+        <summary>Does search need a GPU or an API key?</summary>
+        <p>No. Semantic search uses a small embedding model (bge-small) that runs on the CPU. Keyword search works immediately while embeddings are built.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap">
+      <h2>Stop re-explaining your project.</h2>
+      <div class="cmd">
+        <pre><code><span class="l">git clone https://github.com/devHaitham481/anamnesis</span><span class="l">cd anamnesis && uv tool install -e .</span><span class="l">anam sync && anam connect all</span></code></pre>
+        <button class="copy">Copy</button>
+      </div>
     </div>
   </section>
 </main>
@@ -187,14 +368,18 @@ imported 44 conversations, 5,906 messages
 <footer>
   <div class="wrap">
     <span>Anamnesis — Greek for “recollection”.</span>
-    <a href="#">GitHub</a>
+    <nav>
+      <a href="https://github.com/devHaitham481/anamnesis#readme">Docs</a>
+      <a href="https://github.com/devHaitham481/anamnesis">GitHub</a>
+    </nav>
   </div>
 </footer>
 
 <script>
   document.querySelectorAll(".copy").forEach((b) => {
     b.addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; }
+      const lines = [...b.parentElement.querySelectorAll(".l")].map((l) => l.textContent);
+      try { await navigator.clipboard.writeText(lines.join("\n")); b.textContent = "Copied"; }
       catch { b.textContent = "Failed"; }
       setTimeout(() => (b.textContent = "Copy"), 1500);
     });
