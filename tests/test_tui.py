@@ -74,7 +74,7 @@ async def test_history_rename_delete(service: MemoryService) -> None:
     b, _ = await service.import_conversation(conversation("b", "second", title="Beta thread"))
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: app.thread_id == b.id)  # most recent opened
+        await wait_until(pilot, lambda: ready(app) and app.thread_id == b.id)  # most recent opened
         await submit(pilot, app, "/history claude-code")
         await wait_until(pilot, lambda: "Alpha thread" in views(app)[-1].content)
         await submit(pilot, app, "/open 2")
@@ -97,7 +97,7 @@ async def test_sidebar_selection(service: MemoryService) -> None:
     await service.import_conversation(conversation("b", "two", title="Second"))
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: app.thread_id is not None)
+        await wait_until(pilot, lambda: ready(app) and app.thread_id is not None)
         lv = app.query_one("#threads", ListView)
         lv.focus()
         lv.index = 1

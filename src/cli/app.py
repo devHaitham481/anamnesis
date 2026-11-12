@@ -229,7 +229,6 @@ class AnamnesisApp(App[None]):
         if not msgs:
             self.view.mount(Static("(no messages)", id="empty"))
         self.view.scroll_end(animate=False)
-        self._mark_current()
 
     # ---------- live updates (background imports, other devices, the web UI) ----------
 
