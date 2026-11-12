@@ -1,10 +1,10 @@
-<h1 align="center"><img src="docs/logo.svg" alt="Anamnesis" width="380"></h1>
+<h1 align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/logo.svg" alt="Anamnesis" width="380"></h1>
 
 <p align="center"><b>One memory for all your AI tools.</b><br>What you worked out in ChatGPT, Claude Code already knows.</p>
 
 <p align="center">
   <a href="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="https://github.com/devHaitham481/anamnesis/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-c8653a">
   <a href="https://devhaitham481.github.io/anamnesis/"><img alt="Website" src="https://img.shields.io/badge/website-anamnesis-1c1a17"></a>
@@ -19,7 +19,7 @@
   <img alt="Works with claude.ai" src="https://img.shields.io/badge/claude.ai-d97757?logo=claude&logoColor=white">
 </p>
 
-<p align="center"><img src="docs/screenshot.svg" alt="The Anamnesis terminal UI: Claude Code recalling a decision made in ChatGPT" width="900"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/screenshot.svg" alt="The Anamnesis terminal UI: Claude Code recalling a decision made in ChatGPT" width="900"></p>
 
 <p align="center"><sub>Sample data. Regenerate with <code>python scripts/screenshot.py</code>.</sub></p>
 
@@ -42,7 +42,7 @@ On macOS or Linux, run:
 curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh
 ```
 
-That's all. The [script](site/install.sh) installs [uv](https://docs.astral.sh/uv/) if you don't have it, uses it to install Anamnesis in its own environment (with its own Python, so you need nothing preinstalled and your system Python is never touched), then runs `anam setup`, which:
+That's all. The [script](https://devhaitham481.github.io/anamnesis/install.sh) installs [uv](https://docs.astral.sh/uv/) if you don't have it, uses it to install Anamnesis in its own environment (with its own Python, so you need nothing preinstalled and your system Python is never touched), then runs `anam setup`, which:
 
 1. finds the AI tools on your computer,
 2. imports their history (the first run also downloads a 70 MB search model),
@@ -67,7 +67,7 @@ Requires macOS or Linux (on Windows, use WSL) and Python 3.11+ (uv fetches it if
 
 ```bash
 anam disconnect all          # remove Anamnesis from your AI tools' configs
-uv tool uninstall anamnesis
+uv tool uninstall anamnesis-cli
 rm -rf ~/.anamnesis          # your memory; skip this to keep it
 ```
 

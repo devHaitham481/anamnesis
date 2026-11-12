@@ -317,7 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     from importlib.metadata import PackageNotFoundError, version
 
     try:
-        ver = version("anamnesis")
+        ver = version("anamnesis-cli")
     except PackageNotFoundError:
         ver = "unknown"
     parser.add_argument("--version", action="version", version=f"anam {ver}")

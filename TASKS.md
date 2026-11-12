@@ -74,4 +74,5 @@ Goal: someone who has never heard of Anamnesis goes from the website to a workin
 - [x] `anam disconnect all`, `anam --version`.
 - [x] Prebuilt node image on GHCR (amd64 + arm64); docker-compose and `anam node deploy fly` use it, no clone needed.
 - [x] CI (lint, types, tests on 3.11 and 3.13); README and website install guides.
-- [ ] Publish to PyPI (`anamnesis` and `anamnesis-memory` are taken; pick a name first).
+- [x] PyPI name `anamnesis-cli`, package metadata, release workflow (trusted publishing on `v*` tags).
+- [ ] First PyPI release: add the pending publisher on pypi.org, then tag `v0.1.0`; then point `install.sh` at PyPI.

@@ -3,11 +3,20 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "anamnesis"
+name = "anamnesis-cli"
 version = "0.1.0"
 description = "One local memory shared by all your AI tools (Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini)"
+readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
+keywords = ["mcp", "memory", "claude", "chatgpt", "cursor", "codex", "gemini", "ai-tools"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
 dependencies = [
     "pydantic>=2.6",
     "python-dotenv>=1.0",
@@ -22,6 +31,11 @@ dependencies = [
     "zstandard>=0.22",
     "cryptography>=42",
 ]
+
+[project.urls]
+Homepage = "https://devhaitham481.github.io/anamnesis/"
+Source = "https://github.com/devHaitham481/anamnesis"
+Issues = "https://github.com/devHaitham481/anamnesis/issues"
 
 [project.scripts]
 anam = "anamnesis.cli.__main__:main"

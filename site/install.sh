@@ -47,6 +47,10 @@ else
   source="$REPO/archive/refs/heads/main.tar.gz"
 fi
 say "Installing Anamnesis…"
+# Installs from before the package was named anamnesis-cli: remove, so only one `anam` exists.
+if uv tool list 2>/dev/null | grep -q '^anamnesis v'; then
+  uv tool uninstall anamnesis >/dev/null 2>&1 || true
+fi
 uv tool install --force --reinstall --refresh --python "$PYTHON_VERSION" "$source"
 
 bin_dir="$(uv tool dir --bin)"
