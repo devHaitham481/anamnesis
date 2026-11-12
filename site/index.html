@@ -31,7 +31,7 @@
     -webkit-font-smoothing: antialiased; }
   a { color: inherit; text-underline-offset: 3px; }
   code, pre { font-family: var(--mono); font-size: 14px; }
-  p code, li code, td code, summary code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  p code, li code, td code, summary code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; overflow-wrap: anywhere; }
 
   .wrap { width: min(1080px, 100% - 2 * var(--gutter)); margin: 0 auto; }
 
@@ -63,7 +63,7 @@
   .cmd { position: relative; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
     padding: 12px 64px 12px 14px; }
   .cmd pre { margin: 0; overflow-x: auto; line-height: 1.75; }
-  .cmd .l { display: block; white-space: pre; }
+  .cmd .l { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
   .cmd .l::before { content: "$ "; color: var(--muted); user-select: none; }
   .cmd .c { display: block; white-space: pre; color: var(--muted); }
   .copy { position: absolute; top: 9px; right: 9px; font: 500 12px var(--sans); color: var(--muted);
@@ -110,6 +110,7 @@
   .steps h3 { font-size: 16px; font-weight: 600; margin: 6px 0 4px; }
   .steps p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
   .steps .cmd + .cmd { margin-top: 8px; }
+  .cmd.wide { max-width: 640px; margin: -12px 0 44px; }
   .or { font-size: 13px; color: var(--muted); margin: 8px 0; }
   .fine { margin: 28px 0 0; font-size: 14px; color: var(--muted); }
 
@@ -173,6 +174,7 @@
     <a class="logo" href="#">anamnesis<span>.</span></a>
     <nav>
       <a href="#how">How it works</a>
+      <a href="#install">Install</a>
       <a href="#node">Web &amp; mobile</a>
       <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
@@ -188,10 +190,10 @@
         <h1>One memory for all your AI tools.</h1>
         <p class="lede">What you worked out in ChatGPT, Claude Code already knows. Anamnesis collects your conversations from every AI tool into one private memory that all of them can search.</p>
         <div class="cmd">
-          <pre><code><span class="l">git clone https://github.com/devHaitham481/anamnesis</span><span class="l">cd anamnesis && uv tool install -e .</span><span class="l">anam sync && anam connect all</span></code></pre>
+          <pre><code><span class="l">curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh</span></code></pre>
           <button class="copy">Copy</button>
         </div>
-        <p class="meta">Open source · self-hosted · no account · Python 3.11+</p>
+        <p class="meta">macOS &amp; Linux · open source · no account · <a href="#install">what this does</a></p>
       </div>
       <div class="term" aria-label="Example: Claude Code recalling a decision made in ChatGPT">
         <div class="bar"><i></i><i></i><i></i></div>
@@ -255,6 +257,33 @@ required a denylist anyway.</pre>
     </div>
   </section>
 
+  <section id="install">
+    <div class="wrap">
+      <p class="kicker">Install</p>
+      <h2>One command, then restart your tools.</h2>
+      <p class="intro">Nothing to set up beforehand. The installer brings its own Python and never touches your system's.</p>
+      <div class="cmd wide"><pre><code><span class="l">curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh</span></code></pre><button class="copy">Copy</button></div>
+      <div class="steps">
+        <div>
+          <span class="num">01</span>
+          <h3>Run the installer</h3>
+          <p>It installs <a href="https://docs.astral.sh/uv/">uv</a> if needed, then Anamnesis in its own environment. <a href="install.sh">Read the script</a>.</p>
+        </div>
+        <div>
+          <span class="num">02</span>
+          <h3>Answer one question</h3>
+          <p>Setup finds your AI tools, imports their history, and asks before connecting them. Every config it changes is backed up first.</p>
+        </div>
+        <div>
+          <span class="num">03</span>
+          <h3>Restart your AI tools</h3>
+          <p>Then ask about earlier work: <em>“what did we decide about auth?”</em> New conversations keep syncing on their own.</p>
+        </div>
+      </div>
+      <p class="fine">Rather not pipe a script into your shell? <code>uv tool install git+https://github.com/devHaitham481/anamnesis</code> then <code>anam setup</code>. To update, run the installer again. Windows: use WSL. <a href="https://github.com/devHaitham481/anamnesis#install">Uninstall and troubleshooting</a>.</p>
+    </div>
+  </section>
+
   <section id="node">
     <div class="wrap">
       <p class="kicker">Web &amp; mobile</p>
@@ -273,7 +302,7 @@ required a denylist anyway.</pre>
         <div>
           <span class="num">01</span>
           <h3>Deploy it once</h3>
-          <p>One command on Fly.io, or Docker anywhere. HTTPS included.</p>
+          <p>One command on Fly.io, or Docker anywhere. Prebuilt image, HTTPS included.</p>
           <div class="cmd"><pre><code><span class="l">anam node deploy fly</span></code></pre><button class="copy">Copy</button></div>
           <p class="or">or, on your own server</p>
           <div class="cmd"><pre><code><span class="l">docker compose up -d</span></code></pre><button class="copy">Copy</button></div>
@@ -315,6 +344,7 @@ required a denylist anyway.</pre>
       <h2>Everything from one CLI.</h2>
       <p class="intro">Plus a terminal UI (<code>anam</code>) and a web UI (<code>anam-web</code>) to browse and search everything.</p>
       <table>
+        <tr><td><code>anam setup</code></td><td>Find your AI tools, import their history, connect them. Safe to re-run.</td></tr>
         <tr><td><code>anam sync</code></td><td>Import new history from your local AI tools</td></tr>
         <tr><td><code>anam connect [tool]</code></td><td>Give Claude Code, Claude Desktop, Cursor, Gemini CLI or Codex access. Configs are backed up first.</td></tr>
         <tr><td><code>anam search &lt;query&gt;</code></td><td>Search memory from the terminal</td></tr>
@@ -360,7 +390,7 @@ required a denylist anyway.</pre>
     <div class="wrap">
       <h2>Stop re-explaining your project.</h2>
       <div class="cmd">
-        <pre><code><span class="l">git clone https://github.com/devHaitham481/anamnesis</span><span class="l">cd anamnesis && uv tool install -e .</span><span class="l">anam sync && anam connect all</span></code></pre>
+        <pre><code><span class="l">curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh</span></code></pre>
         <button class="copy">Copy</button>
       </div>
     </div>

@@ -34,17 +34,53 @@
 
 Anamnesis does one thing: it is the memory. It is not a chat client and never calls a model; you keep talking to the tools you already use.
 
-## Quick start
+## Install
+
+On macOS or Linux, run:
 
 ```bash
-uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"
-
-.venv/bin/anam sync              # import your existing history (first run: model download + embedding)
-.venv/bin/anam connect           # see which AI tools are installed / connected
-.venv/bin/anam connect all       # give all of them access to the memory (MCP)
+curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh
 ```
 
-After `connect`, restart the tool (or open a new session). Agents will use `search_memory` when you refer to earlier work, and `remember` to save decisions. While any connected tool is running, new conversations keep syncing in the background.
+That's all. The [script](site/install.sh) installs [uv](https://docs.astral.sh/uv/) if you don't have it, uses it to install Anamnesis in its own environment (with its own Python, so you need nothing preinstalled and your system Python is never touched), then runs `anam setup`, which:
+
+1. finds the AI tools on your computer,
+2. imports their history (the first run also downloads a 70 MB search model),
+3. asks, then connects them to your memory (each tool's config is backed up first).
+
+Then **restart your AI tools** and ask about earlier work: "what did we decide about auth?"
+
+<details>
+<summary>Install without the script</summary>
+
+```bash
+uv tool install git+https://github.com/devHaitham481/anamnesis   # or: pipx install git+https://…
+anam setup
+```
+
+Requires macOS or Linux (on Windows, use WSL) and Python 3.11+ (uv fetches it if needed).
+</details>
+
+**Update:** run the install command again. Setup re-runs safely and repairs tool connections left by an older version.
+
+**Uninstall:**
+
+```bash
+anam disconnect all          # remove Anamnesis from your AI tools' configs
+uv tool uninstall anamnesis
+rm -rf ~/.anamnesis          # your memory; skip this to keep it
+```
+
+<details>
+<summary>Troubleshooting</summary>
+
+- **`anam: command not found`:** open a new terminal. The installer added `~/.local/bin` to your PATH, which only applies to new terminals.
+- **A tool doesn't seem to use the memory:** restart it. If `anam status` shows a tool as *outdated*, run `anam setup`.
+- **The first import takes a while:** building the semantic index runs once. Keyword search works right away.
+- **No internet on first run:** semantic search stays off until the model can be downloaded; keyword search works.
+</details>
+
+After setup, new conversations keep syncing in the background while any connected tool is running. Agents use `search_memory` when you refer to earlier work and `remember` to save decisions.
 
 ### Your memory in claude.ai, ChatGPT and on your phone: your own node
 
@@ -60,7 +96,15 @@ Web and mobile chats can't reach a program on your laptop, and your laptop isn't
 anam node deploy fly            # Fly.io: creates the app, a 1 GB volume and your password, then links this computer
 ```
 
-or, on any server with Docker (VPS, NAS, home server), put `ANAMNESIS_DOMAIN` and `ANAMNESIS_NODE_PASSWORD` in a `.env` next to [`docker-compose.yml`](docker-compose.yml) and run `docker compose up -d`. Caddy gets the HTTPS certificate for you.
+or, on any server with Docker (VPS, NAS, home server), no clone needed:
+
+```bash
+curl -O https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docker-compose.yml
+printf 'ANAMNESIS_DOMAIN=memory.example.com\nANAMNESIS_NODE_PASSWORD=%s\n' "$(openssl rand -base64 18)" > .env
+docker compose up -d
+```
+
+Point the domain at the server first. Caddy gets the HTTPS certificate for you. The password is in `.env`; you'll need it in the next step. Both paths use the prebuilt image `ghcr.io/devhaitham481/anamnesis` (x86 and ARM). Update with `docker compose pull && docker compose up -d`, or by re-running `anam node deploy fly --app <name>`.
 
 **2. Link your computers.** On each one:
 
@@ -120,12 +164,13 @@ Only what you and the assistant *said* is kept: tool calls, tool output, reasoni
 ### Commands
 
 ```
+anam setup                guided setup; safe to re-run (after upgrades too)
 anam                      terminal memory browser
 anam sync [--watch]       import new local history now (or keep watching)
 anam import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
 anam search QUERY         search everything from the shell  [--source chatgpt]
 anam connect [TOOL|all]   claude-code, claude-desktop, cursor, gemini-cli, codex
-anam disconnect TOOL
+anam disconnect TOOL|all
 anam share [FOLDER]       sync memory across computers (prints a pairing code)
 anam join CODE [FOLDER]   add this computer;  anam devices / anam unshare
 anam status               what is stored per tool, sync state, connected tools
@@ -152,7 +197,7 @@ The sidebar shows every conversation with a source badge (`CC` Claude Code, `CX`
 
 ## Web UI & API
 
-`.venv/bin/anam-web`, then open http://127.0.0.1:8000. Use the search box and the "All tools" filter to browse memory.
+`anam-web`, then open http://127.0.0.1:8000. Use the search box and the "All tools" filter to browse memory.
 
 | Endpoint | |
 |---|---|
@@ -171,14 +216,19 @@ Everything comes from `.env` or the environment (see `.env.example`); nothing is
 ## Development
 
 ```bash
+git clone https://github.com/devHaitham481/anamnesis && cd anamnesis
+uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"
 .venv/bin/pytest -q                  # everything offline: importers, MCP over stdio, TUI, web, browser e2e
 .venv/bin/ruff check . && .venv/bin/mypy src
 ```
 
-Layout:
-- `src/ingest`: one parser per tool, plus the incremental scanner
-- `src/memory_mcp`: the MCP server
-- `src/connect.py`: tool registration
-- `src/core`: storage, search, the memory service, cross-device sync (folder or node)
-- `src/node`: the self-hosted node (sync hub, OAuth, remote MCP); `Dockerfile`, `docker-compose.yml`, `fly.toml`
-- `src/cli`, `src/web`: the interfaces
+To run your checkout as your everyday `anam`: `uv tool install -e .`, then `anam setup` (it re-points your AI tools at it).
+
+Layout (`src/anamnesis/`):
+- `ingest/`: one parser per tool, plus the incremental scanner
+- `memory_mcp/`: the MCP server
+- `connect.py`: tool registration; `cli/setup_cmd.py`: `anam setup`
+- `core/`: storage, search, the memory service, cross-device sync (folder or node)
+- `node/`: the self-hosted node (sync hub, OAuth, remote MCP); `Dockerfile`, `docker-compose.yml`, `fly.toml`
+- `cli/`, `web/`: the interfaces
+- `site/`: the website and `install.sh`, published by GitHub Pages

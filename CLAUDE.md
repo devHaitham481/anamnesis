@@ -22,11 +22,11 @@ When assigned a task or milestone:
 
 ## 3. Essential Commands
 
-- **Install Dependencies:** `pip install -e .` or `pnpm install`
+- **Install Dependencies:** `uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"`
 - **Run Tests:** `pytest` or `pnpm test`
 - **Lint & Format:** `ruff check --fix .` or `pnpm lint`
-- **Run CLI:** `python -m src.cli`
-- **Run Web Server:** `uvicorn src.web.main:app --reload`
+- **Run CLI:** `python -m anamnesis.cli` (or `anam`)
+- **Run Web Server:** `uvicorn anamnesis.web.main:app --reload`
 
 ## 4. Quality Rules
 

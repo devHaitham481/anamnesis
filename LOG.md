@@ -127,3 +127,12 @@ An independent review agent audited the codebase; all findings fixed with regres
   - Full suite: 94 passed (3 runs). Ruff and mypy clean.
 - **Not verified:** a real Fly.io deploy (flyctl isn't installed here), and real claude.ai / ChatGPT connectors (they need a public HTTPS node). The ChatGPT setup steps are written from memory of its UI and may need adjusting.
 
+
+## 2026-11-12 — Sprint 8: Launch: Install & Setup
+
+- **Package rename:** `src/*` moved to `src/anamnesis/*` and every import changed from `src.` to `anamnesis.`. A top-level `src` package clashed with any other tool that ships one. The MCP server command is now `python -m anamnesis.memory_mcp`. Two paths that counted parent directories (`PROJECT_ROOT`, the repo `.env`) were adjusted for the extra level.
+- **`connect.py`:** each target has `current()`: connected *and* launching this install. `connect()` updates outdated entries in place (Codex: strips the old block, one `.bak` of the untouched file). `anam connect` lists them as "outdated".
+- **`anam setup` (`cli/setup_cmd.py`):** tools found, then import (reuses `anam sync`), then one Y/n prompt to connect. With no terminal and no `--yes`, it never edits configs and prints `anam connect all` instead. Also added `anam disconnect all` and `anam --version`. Hugging Face download noise is silenced.
+- **`site/install.sh`:** installs uv if missing, then `uv tool install --force --reinstall --refresh --python 3.12` from git, or from the source archive when git is absent. Then it runs `anam setup </dev/tty`. Tested in a clean `debian:bookworm-slim` with no Python: uv, Python, Anamnesis and setup all worked, and `anam` works in a new login shell.
+- **Node image:** `.github/workflows/docker.yml` pushes `ghcr.io/devhaitham481/anamnesis` (latest, sha, semver tags; amd64 + arm64). `docker-compose.yml` uses it. `anam node deploy fly` deploys it by default (`--build` deploys a checkout). Built and smoke-tested locally (`/healthz` ok).
+- **Tests:** +4 setup tests (fake home: no tools, connect + re-run, asks first and never edits without a terminal, disconnect all), stale-entry repair, and deploy-fly with a fake flyctl that records calls and the generated fly.toml.

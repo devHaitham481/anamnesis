@@ -62,3 +62,16 @@ Goal: claude.ai / ChatGPT (web + mobile) can search memory and save notes even w
 - [x] `anam node activity` / `revoke` / `wipe`.
 - [x] Dockerfile + docker-compose; `fly.toml` + `anam node deploy fly`.
 - [x] Docs: self-hosting guide.
+
+### Sprint 8: Launch: Install & Setup
+
+Goal: someone who has never heard of Anamnesis goes from the website to a working memory with one command.
+
+- [x] Rename the package from `src` to `anamnesis` (src layout), so installing it can't clash with other tools.
+- [x] `install.sh` (served by GitHub Pages): installs uv if needed, Anamnesis with its own Python, then runs setup.
+- [x] `anam setup`: detect tools, import history, ask before connecting, say what's next. Safe to re-run.
+- [x] `anam connect` repairs entries that point at an old install; `anam status` shows them as outdated.
+- [x] `anam disconnect all`, `anam --version`.
+- [x] Prebuilt node image on GHCR (amd64 + arm64); docker-compose and `anam node deploy fly` use it, no clone needed.
+- [x] CI (lint, types, tests on 3.11 and 3.13); README and website install guides.
+- [ ] Publish to PyPI (`anamnesis` and `anamnesis-memory` are taken; pick a name first).

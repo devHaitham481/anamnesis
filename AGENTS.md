@@ -9,12 +9,12 @@
 
 ### Memory & Ingestion Specialist
 
-- **Focus Directory:** `/src/core`, `/src/ingest`, `/src/memory_mcp`
+- **Focus Directory:** `src/anamnesis/core`, `src/anamnesis/ingest`, `src/anamnesis/memory_mcp`
 - **Responsibility:** Implements SQLite schemas, LanceDB retrieval, importers for each AI tool, cross-device sync and the MCP server.
 
 ### Interface Developer (TUI & Web)
 
-- **Focus Directory:** `/src/cli`, `/src/web`
+- **Focus Directory:** `src/anamnesis/cli`, `src/anamnesis/web`
 - **Responsibility:** Builds the Textual TUI and FastAPI web memory browsers (read, search, manage). Ensures new memory shows up live in both.
 
 ## 2. Verification Protocol
