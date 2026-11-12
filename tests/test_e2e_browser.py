@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 import uvicorn
 
-from src.config import Settings
-from src.core.db import Database
-from src.web.main import create_app
+from anamnesis.config import Settings
+from anamnesis.core.db import Database
+from anamnesis.web.main import create_app
 from tests.conftest import conversation, open_service
 
 sync_api = pytest.importorskip("playwright.sync_api")
@@ -129,7 +129,7 @@ def test_full_web_flow(server: tuple[str, Settings], browser: object) -> None:
     mirror.goto(url + "#" + page.evaluate("location.hash.slice(1)"))
     expect(mirror.locator("article.msg[data-id]")).to_have_count(2)
     script = (
-        "import asyncio, sys; from src.core.db import Database\n"
+        "import asyncio, sys; from anamnesis.core.db import Database\n"
         "from tests.conftest import conversation\n"
         "async def main():\n"
         "    async with Database(sys.argv[1]) as db:\n"

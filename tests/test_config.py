@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.config import DEFAULT_EMBEDDING_MODEL, Settings, load_settings
+from anamnesis.config import DEFAULT_EMBEDDING_MODEL, Settings, load_settings
 
 
 def test_defaults_need_no_api_keys(tmp_path: Path) -> None:
@@ -41,7 +41,7 @@ def test_legacy_env_names_still_work() -> None:
 
 
 def test_migrate_legacy_data_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    from src.config import migrate_legacy_data_dir
+    from anamnesis.config import migrate_legacy_data_dir
 
     old, new = tmp_path / ".nexus-ai", tmp_path / ".anamnesis"
     (old / "vectors").mkdir(parents=True)

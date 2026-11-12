@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.core.db import Database, ThreadNotFoundError
+from anamnesis.core.db import Database, ThreadNotFoundError
 
 
 @pytest.fixture

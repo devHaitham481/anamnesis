@@ -12,11 +12,11 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from starlette.websockets import WebSocketDisconnect
 
-from src.config import Settings
-from src.core.db import Database
-from src.core.memory import MemoryService
-from src.core.models import ImportedConversation
-from src.web.main import create_app
+from anamnesis.config import Settings
+from anamnesis.core.db import Database
+from anamnesis.core.memory import MemoryService
+from anamnesis.core.models import ImportedConversation
+from anamnesis.web.main import create_app
 from tests.conftest import conversation, open_service
 
 
@@ -169,6 +169,6 @@ def test_auth_token(settings: Settings) -> None:
 
 
 def test_module_level_app_imports() -> None:
-    from src.web import main
+    from anamnesis.web import main
 
     assert main.app.title == "Anamnesis"

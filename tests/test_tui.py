@@ -4,9 +4,9 @@ import asyncio
 
 from textual.widgets import Input, ListView
 
-from src.cli.app import AnamnesisApp
-from src.cli.widgets import MessageView, ThreadItem
-from src.core.memory import MemoryService
+from anamnesis.cli.app import AnamnesisApp
+from anamnesis.cli.widgets import MessageView, ThreadItem
+from anamnesis.core.memory import MemoryService
 from tests.conftest import conversation
 
 

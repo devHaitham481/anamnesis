@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from src.core.db import Database, ThreadNotFoundError
-from src.core.models import Message
-from src.core.vector import HashEmbedder, VectorIndex
+from anamnesis.core.db import Database, ThreadNotFoundError
+from anamnesis.core.models import Message
+from anamnesis.core.vector import HashEmbedder, VectorIndex
 
 
 # 1. Failed write must not leave SQLite locked for the other process.

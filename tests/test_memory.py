@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from src.core.db import Database
-from src.core.memory import MemoryService
-from src.core.models import ImportedConversation, ImportedMessage
-from src.ingest.claude_code import ClaudeCodeSource
-from src.ingest.runner import scan, sync_lock, sync_once
-from src.memory_mcp import server as mcp_server
+from anamnesis.core.db import Database
+from anamnesis.core.memory import MemoryService
+from anamnesis.core.models import ImportedConversation, ImportedMessage
+from anamnesis.ingest.claude_code import ClaudeCodeSource
+from anamnesis.ingest.runner import scan, sync_lock, sync_once
+from anamnesis.memory_mcp import server as mcp_server
 
 
 def conv(
@@ -240,7 +240,7 @@ async def test_mcp_tools(service: MemoryService) -> None:
 
 
 async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
-    """Spawn `python -m src.memory_mcp` exactly as Claude Code / Cursor would and talk MCP."""
+    """Spawn `python -m anamnesis.memory_mcp` exactly as Claude Code / Cursor would and talk MCP."""
     import sys
 
     from mcp.client.session import ClientSession
@@ -253,7 +253,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
         )
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "src.memory_mcp"],
+        args=["-m", "anamnesis.memory_mcp"],
         cwd=str(tmp_path),  # not the project dir: must work from anywhere
         env={
             "ANAMNESIS_DATA_DIR": str(data),
@@ -294,7 +294,7 @@ def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_connect_json_tools_merge_and_back_up(fake_home: Path) -> None:
-    from src.connect import targets
+    from anamnesis.connect import targets
 
     gemini = fake_home / ".gemini" / "settings.json"
     gemini.parent.mkdir()
@@ -304,7 +304,7 @@ def test_connect_json_tools_merge_and_back_up(fake_home: Path) -> None:
     t["gemini-cli"].connect()
     data = json.loads(gemini.read_text())
     assert data["theme"] == "dark" and "other" in data["mcpServers"]
-    assert data["mcpServers"]["anamnesis"]["args"] == ["-m", "src.memory_mcp"]
+    assert data["mcpServers"]["anamnesis"]["args"] == ["-m", "anamnesis.memory_mcp"]
     assert Path(data["mcpServers"]["anamnesis"]["command"]).is_absolute()
     assert json.loads(gemini.with_name("settings.json.bak").read_text())["theme"] == "dark"
     assert t["gemini-cli"].connected()
@@ -317,7 +317,7 @@ def test_connect_json_tools_merge_and_back_up(fake_home: Path) -> None:
 
 
 def test_connect_codex_toml(fake_home: Path) -> None:
-    from src.connect import targets
+    from anamnesis.connect import targets
 
     cfg = fake_home / ".codex" / "config.toml"
     cfg.parent.mkdir()
@@ -332,8 +332,35 @@ def test_connect_codex_toml(fake_home: Path) -> None:
     assert set(parsed["mcp_servers"]) == {"other"}
 
 
+def test_connect_repairs_entries_from_an_old_install(fake_home: Path) -> None:
+    """After a reinstall, rename or move, connect points tools at this install again."""
+    from anamnesis.connect import targets
+
+    stale = {"command": "/old/.venv/bin/python", "args": ["-m", "src.memory_mcp"]}
+    gemini = fake_home / ".gemini" / "settings.json"
+    gemini.parent.mkdir()
+    gemini.write_text(json.dumps({"mcpServers": {"anamnesis": stale}}))
+    cfg = fake_home / ".codex" / "config.toml"
+    cfg.parent.mkdir()
+    cfg.write_text(
+        'model = "m"\n\n[mcp_servers.anamnesis]\ncommand = "/old/python"\n'
+        'args = ["-m", "src.memory_mcp"]\n\n[mcp_servers.other]\ncommand = "x"\n'
+    )
+    t = targets()
+    for name in ("gemini-cli", "codex"):
+        assert t[name].connected() and not t[name].current()
+        assert t[name].connect().startswith("updated")
+        assert t[name].current() and t[name].connect() == "already connected"
+    entry = json.loads(gemini.read_text())["mcpServers"]["anamnesis"]
+    assert entry["args"] == ["-m", "anamnesis.memory_mcp"]
+    parsed = tomllib.loads(cfg.read_text())
+    assert parsed["model"] == "m" and set(parsed["mcp_servers"]) == {"other", "anamnesis"}
+    assert parsed["mcp_servers"]["anamnesis"]["args"] == ["-m", "anamnesis.memory_mcp"]
+    assert "src.memory_mcp" in cfg.with_name("config.toml.bak").read_text()  # original kept
+
+
 def test_refuses_to_clobber_invalid_config(fake_home: Path) -> None:
-    from src.connect import targets
+    from anamnesis.connect import targets
 
     cfg = fake_home / ".cursor" / "mcp.json"
     cfg.parent.mkdir()

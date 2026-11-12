@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from src.config import Settings
-from src.core.devices import (
+from anamnesis.config import Settings
+from anamnesis.core.devices import (
     SyncSetupError,
     decrypt,
     encode_code,
@@ -19,8 +19,8 @@ from src.core.devices import (
     share,
     this_device,
 )
-from src.core.memory import MemoryService
-from src.core.models import ImportedConversation, ImportedMessage
+from anamnesis.core.memory import MemoryService
+from anamnesis.core.models import ImportedConversation, ImportedMessage
 from tests.conftest import open_service
 
 

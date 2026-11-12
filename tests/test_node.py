@@ -20,10 +20,10 @@ import httpx
 import pytest
 import uvicorn
 
-from src.config import Settings
-from src.core import devices
-from src.core.memory import MemoryService
-from src.node.app import NodeConfigError, NodeSettings, build_node_app
+from anamnesis.config import Settings
+from anamnesis.core import devices
+from anamnesis.core.memory import MemoryService
+from anamnesis.node.app import NodeConfigError, NodeSettings, build_node_app
 from tests.conftest import conversation, open_service
 
 PASSWORD = "correct horse battery staple"
@@ -416,12 +416,13 @@ def test_node_status_page_and_metadata(node: Node) -> None:
 def test_cli_link_scope_status_and_connect(
     node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from src.cli.__main__ import main
+    from anamnesis.cli.__main__ import main
 
     data = tmp_path / "cli"
     monkeypatch.setenv("ANAMNESIS_DATA_DIR", str(data))
     monkeypatch.setenv("ANAMNESIS_SEMANTIC_SEARCH", "false")
-    monkeypatch.setattr("src.ingest.runner.default_sources", lambda: [])  # no real tool history
+    # no real tool history
+    monkeypatch.setattr("anamnesis.ingest.runner.default_sources", lambda: [])
 
     assert main(["connect", "claude-web"]) == 1
     assert "anam node deploy fly" in capsys.readouterr().out
@@ -447,3 +448,39 @@ def test_cli_link_scope_status_and_connect(
     assert "No activity yet." in capsys.readouterr().out
     assert main(["node", "wipe", "--yes"]) == 0
     assert devices.load_config(data) is None
+
+
+def test_deploy_fly_uses_the_published_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`anam node deploy fly` with a fake flyctl that records every call and the fly.toml."""
+    from anamnesis.cli.__main__ import main
+    from anamnesis.cli.node_cmd import DEFAULT_IMAGE, PROJECT_ROOT
+
+    log = tmp_path / "fly.log"
+    fly = tmp_path / "fly"
+    fly.write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> {log}\n'
+        'prev=""; for a in "$@"; do\n'
+        f'  [ "$prev" = "--config" ] && cat "$a" >> {log}\n'
+        '  prev="$a"; done\n'
+        "exit 0\n"
+    )
+    fly.chmod(0o755)
+    monkeypatch.setattr("shutil.which", lambda name: str(fly) if name == "fly" else None)
+    monkeypatch.setenv("ANAMNESIS_NODE_PASSWORD", "correct horse battery")
+    monkeypatch.setenv("ANAMNESIS_DATA_DIR", str(tmp_path / "data"))
+
+    assert main(["node", "deploy", "fly", "--app", "anamnesis-test", "--no-link"]) == 0
+    calls = log.read_text()
+    assert "apps create anamnesis-test" in calls
+    assert "secrets set ANAMNESIS_NODE_PASSWORD=correct horse battery" in calls
+    assert f'image = "{DEFAULT_IMAGE}"' in calls and "dockerfile" not in calls
+    assert "https://anamnesis-test.fly.dev" in capsys.readouterr().out
+
+    log.write_text("")
+    assert (PROJECT_ROOT / "Dockerfile").is_file()  # running from a checkout
+    assert main(["node", "deploy", "fly", "--app", "anamnesis-dev", "--no-link", "--build"]) == 0
+    calls = log.read_text()
+    assert 'dockerfile = "Dockerfile"' in calls and str(PROJECT_ROOT) in calls

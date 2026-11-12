@@ -1,8 +1,8 @@
 import time
 from pathlib import Path
 
-from src.core.models import Message
-from src.core.vector import HashEmbedder, VectorIndex
+from anamnesis.core.models import Message
+from anamnesis.core.vector import HashEmbedder, VectorIndex
 
 
 def msg(i: int, text: str, thread: str = "t1") -> Message:

@@ -24,9 +24,9 @@ dependencies = [
 ]
 
 [project.scripts]
-anam = "src.cli.__main__:main"
-anam-web = "src.web.__main__:main"
-anam-mcp = "src.memory_mcp.server:main"
+anam = "anamnesis.cli.__main__:main"
+anam-web = "anamnesis.web.__main__:main"
+anam-mcp = "anamnesis.memory_mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
@@ -39,11 +39,12 @@ dev = [
 e2e = ["playwright>=1.45"]
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+where = ["src"]
+include = ["anamnesis*"]
 
 [tool.setuptools.package-data]
-"src.cli" = ["*.tcss"]
-"src.web" = ["static/*"]
+"anamnesis.cli" = ["*.tcss"]
+"anamnesis.web" = ["static/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -53,6 +54,7 @@ filterwarnings = ["error::RuntimeWarning", "ignore::UserWarning:pydantic.*"]
 
 [tool.ruff]
 line-length = 100
+src = ["src", "."]
 target-version = "py311"
 
 [tool.ruff.lint]

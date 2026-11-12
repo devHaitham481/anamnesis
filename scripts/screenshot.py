@@ -12,14 +12,14 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 
-from src.cli.app import AnamnesisApp  # noqa: E402
-from src.config import Settings  # noqa: E402
-from src.core.db import Database  # noqa: E402
-from src.core.memory import MemoryService  # noqa: E402
-from src.core.models import ImportedConversation, ImportedMessage  # noqa: E402
-from src.core.vector import HashEmbedder, VectorIndex  # noqa: E402
+from anamnesis.cli.app import AnamnesisApp  # noqa: E402
+from anamnesis.config import Settings  # noqa: E402
+from anamnesis.core.db import Database  # noqa: E402
+from anamnesis.core.memory import MemoryService  # noqa: E402
+from anamnesis.core.models import ImportedConversation, ImportedMessage  # noqa: E402
+from anamnesis.core.vector import HashEmbedder, VectorIndex  # noqa: E402
 
 DAY = 86_400.0
 NOW = 1_794_000_000.0

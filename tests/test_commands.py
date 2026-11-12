@@ -1,6 +1,13 @@
 import pytest
 
-from src.cli.commands import COMMANDS, Command, CommandError, help_text, is_command, parse_command
+from anamnesis.cli.commands import (
+    COMMANDS,
+    Command,
+    CommandError,
+    help_text,
+    is_command,
+    parse_command,
+)
 
 
 def test_parse() -> None:

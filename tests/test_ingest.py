@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 import zstandard
 
-from src.ingest.claude_code import ClaudeCodeSource
-from src.ingest.clean import clean_text
-from src.ingest.codex import CodexSource
-from src.ingest.cursor import CursorSource
-from src.ingest.exports import ExportFormatError, parse_export
-from src.ingest.gemini_cli import GeminiCliSource
+from anamnesis.ingest.claude_code import ClaudeCodeSource
+from anamnesis.ingest.clean import clean_text
+from anamnesis.ingest.codex import CodexSource
+from anamnesis.ingest.cursor import CursorSource
+from anamnesis.ingest.exports import ExportFormatError, parse_export
+from anamnesis.ingest.gemini_cli import GeminiCliSource
 
 
 def jsonl(path: Path, records: list[dict[str, object]]) -> Path:

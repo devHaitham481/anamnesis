@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from src.config import Settings
-from src.core.db import Database
-from src.core.memory import MemoryService
-from src.core.models import ImportedConversation, ImportedMessage
-from src.core.vector import HashEmbedder, VectorIndex
+from anamnesis.config import Settings
+from anamnesis.core.db import Database
+from anamnesis.core.memory import MemoryService
+from anamnesis.core.models import ImportedConversation, ImportedMessage
+from anamnesis.core.vector import HashEmbedder, VectorIndex
 
 
 @pytest.fixture
