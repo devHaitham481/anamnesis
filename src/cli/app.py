@@ -195,7 +195,7 @@ class AnamnesisApp(App[None]):
         else:
             for t in threads:
                 if t.id == self.thread_id:
-                    self.sub_title = t.title
+                    self.sub_title = _subtitle(t)
         await self._update_status()
         return threads
 
@@ -216,10 +216,8 @@ class AnamnesisApp(App[None]):
             return
         self.thread_id = thread.id
         self._thread_source = thread.source
-        label = SOURCE_LABELS.get(thread.source, thread.source)
-        self.sub_title = f"{thread.title} · {label}" + (
-            f" · {thread.project}" if thread.project else ""
-        )
+        self.sub_title = _subtitle(thread)
+        self._mark_current()  # highlight immediately, before the (slower) message render
         self._cursor = max(self._cursor, await svc.latest_message_id())
         msgs = await svc.messages(thread.id, limit=MAX_RENDERED_MESSAGES)
         await self.view.remove_children()
@@ -351,3 +349,8 @@ class AnamnesisApp(App[None]):
 
     def action_focus_prompt(self) -> None:
         self.query_one("#prompt", Input).focus()
+
+
+def _subtitle(thread: Thread) -> str:
+    label = SOURCE_LABELS.get(thread.source, thread.source)
+    return f"{thread.title} · {label}" + (f" · {thread.project}" if thread.project else "")

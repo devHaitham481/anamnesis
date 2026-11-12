@@ -46,6 +46,8 @@ async def test_opens_latest_conversation_read_only(service: MemoryService) -> No
         assert [i.has_class("current") for i in app.query(ThreadItem)] == [True, False]
         assert "2 conversations from 1 sources" in str(app.query_one("#status").render())
         assert not app.query("#model")  # no model picker: this is not a chat client
+        await app._refresh_threads()  # a sidebar refresh keeps the full subtitle
+        assert app.sub_title == "Deploys · Claude Code · /w/api"
 
 
 async def test_plain_text_searches_and_open(service: MemoryService) -> None:
