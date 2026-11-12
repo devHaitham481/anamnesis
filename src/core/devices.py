@@ -34,7 +34,7 @@ from typing import Any
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from src.core.chat import ChatService
+from src.core.memory import MemoryService
 from src.core.models import ImportedConversation, ImportedMessage
 
 log = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ class ExchangeReport:
     errors: list[str] = field(default_factory=list)
 
 
-async def exchange(service: ChatService, cfg: SyncConfig | None = None) -> ExchangeReport:
+async def exchange(service: MemoryService, cfg: SyncConfig | None = None) -> ExchangeReport:
     """Publish this device's new memory to the folder and import everyone else's."""
     data_dir = service.settings.data_dir
     cfg = cfg or load_config(data_dir)
@@ -294,7 +294,7 @@ async def exchange(service: ChatService, cfg: SyncConfig | None = None) -> Excha
     return report
 
 
-async def _export(service: ChatService, cfg: SyncConfig, device: Device) -> int:
+async def _export(service: MemoryService, cfg: SyncConfig, device: Device) -> int:
     db = service.db
     cursor = int(await db.get_ingest_signature("sync:export") or 0)
     own = cfg.root / device.id
@@ -338,7 +338,7 @@ async def _export(service: ChatService, cfg: SyncConfig, device: Device) -> int:
 
 
 async def _import_device(
-    service: ChatService, cfg: SyncConfig, device_dir: Path
+    service: MemoryService, cfg: SyncConfig, device_dir: Path
 ) -> tuple[int, str | None]:
     """Import another device's segments in order. Returns (messages added, error or None).
 

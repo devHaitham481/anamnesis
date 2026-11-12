@@ -1,4 +1,4 @@
-"""Async SQLite store for threads, messages and providers (with FTS5 keyword search)."""
+"""Async SQLite store for threads and messages (with FTS5 keyword search)."""
 
 from __future__ import annotations
 
@@ -17,16 +17,11 @@ import aiosqlite
 from src.core.models import ImportedConversation, Message, Role, SearchHit, Thread
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS providers (
-    name          TEXT PRIMARY KEY,
-    default_model TEXT NOT NULL,
-    updated_at    REAL NOT NULL
-);
 CREATE TABLE IF NOT EXISTS threads (
     id            TEXT PRIMARY KEY,
     title         TEXT NOT NULL,
-    model         TEXT NOT NULL,
-    system_prompt TEXT,
+    model         TEXT NOT NULL DEFAULT '',  -- unused; kept for old databases
+    system_prompt TEXT,                      -- unused; kept for old databases
     created_at    REAL NOT NULL,
     updated_at    REAL NOT NULL
 );
@@ -80,9 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_threads_source ON threads(source, updated_at DESC
 UPDATE threads SET source = 'anamnesis' WHERE source = 'nexus';  -- pre-rename native chats
 """
 
-_THREAD_COLS = (
-    "id, title, model, system_prompt, created_at, updated_at, source, project, external_id"
-)
+_THREAD_COLS = "id, title, created_at, updated_at, source, project, external_id"
 _MSG_COLS = "id, thread_id, role, content, provider, model, created_at"
 
 
@@ -184,40 +177,19 @@ class Database:
         async with self.conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
 
-    # ---------- providers ----------
-
-    async def upsert_provider(self, name: str, default_model: str) -> None:
-        async with self._write() as conn:
-            await conn.execute(
-                "INSERT INTO providers(name, default_model, updated_at) VALUES (?, ?, ?) "
-                "ON CONFLICT(name) DO UPDATE SET default_model=excluded.default_model, "
-                "updated_at=excluded.updated_at",
-                (name, default_model, time.time()),
-            )
-
-    async def list_providers(self) -> dict[str, str]:
-        rows = await self._fetchall("SELECT name, default_model FROM providers ORDER BY name")
-        return {r["name"]: r["default_model"] for r in rows}
-
     # ---------- threads ----------
 
-    async def create_thread(
-        self, title: str = "New chat", model: str = "claude", system_prompt: str | None = None
-    ) -> Thread:
+    async def create_thread(self, title: str, source: str = "anamnesis") -> Thread:
+        """A thread with no external id (the old in-app chats were stored like this)."""
         now = time.time()
         thread = Thread(
-            id=uuid.uuid4().hex,
-            title=title,
-            model=model,
-            system_prompt=system_prompt,
-            created_at=now,
-            updated_at=now,
+            id=uuid.uuid4().hex, title=title, created_at=now, updated_at=now, source=source
         )
         async with self._write() as conn:
             await conn.execute(
-                "INSERT INTO threads(id, title, model, system_prompt, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (thread.id, thread.title, thread.model, thread.system_prompt, now, now),
+                "INSERT INTO threads(id, title, model, created_at, updated_at, source) "
+                "VALUES (?, ?, '', ?, ?, ?)",
+                (thread.id, thread.title, now, now, source),
             )
         return thread
 
@@ -245,14 +217,12 @@ class Database:
         )
         return {r["source"]: int(r["n"]) for r in rows}
 
-    async def update_thread(
-        self, thread_id: str, *, title: str | None = None, model: str | None = None
-    ) -> Thread:
+    async def update_thread(self, thread_id: str, *, title: str | None = None) -> Thread:
         thread = await self.get_thread(thread_id)
         async with self._write() as conn:
             await conn.execute(
-                "UPDATE threads SET title = ?, model = ?, updated_at = ? WHERE id = ?",
-                (title or thread.title, model or thread.model, time.time(), thread_id),
+                "UPDATE threads SET title = ?, updated_at = ? WHERE id = ?",
+                (title or thread.title, time.time(), thread_id),
             )
         return await self.get_thread(thread_id)
 
@@ -390,7 +360,7 @@ class Database:
     # ---------- imports from other tools ----------
 
     async def import_conversation(
-        self, conv: ImportedConversation, model: str, origin: str | None = None
+        self, conv: ImportedConversation, origin: str | None = None
     ) -> tuple[Thread, list[Message]]:
         """Upsert a conversation from another tool; returns the thread and only NEW messages.
 
@@ -412,11 +382,10 @@ class Database:
                 thread_id = uuid.uuid4().hex
                 await conn.execute(
                     "INSERT INTO threads(id, title, model, created_at, updated_at, source, "
-                    "project, external_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "project, external_id) VALUES (?, ?, '', ?, ?, ?, ?, ?)",
                     (
                         thread_id,
                         title or _fallback_title(msgs),
-                        model,
                         first,
                         last,
                         conv.source,

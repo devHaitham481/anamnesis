@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 
 from src.config import Settings
-from src.core.chat import ChatService
-from src.core.db import Database
 from src.core.devices import (
     SyncSetupError,
     decrypt,
@@ -21,26 +19,18 @@ from src.core.devices import (
     share,
     this_device,
 )
+from src.core.memory import MemoryService
 from src.core.models import ImportedConversation, ImportedMessage
-from src.core.vector import HashEmbedder, VectorIndex
-from src.providers.router import ProviderRouter
-from tests.conftest import FakeLLM
+from tests.conftest import open_service
 
 
-async def make_service(root: Path, name: str) -> ChatService:
-    settings = Settings(
-        anthropic_api_key="fake",  # type: ignore[arg-type]
-        data_dir=root / name,
-        memory_sync=False,
-        rag_min_score=0.3,
-    )
-    db = await Database(settings.db_path).open()
-    index = VectorIndex(settings.vector_path, HashEmbedder())
-    return ChatService(db, ProviderRouter(settings, completion_fn=FakeLLM()), index, settings)
+async def make_service(root: Path, name: str) -> MemoryService:
+    settings = Settings(data_dir=root / name, memory_sync=False, semantic_min_score=0.3)
+    return await open_service(settings)
 
 
 @pytest.fixture
-async def laptops(tmp_path: Path) -> AsyncIterator[tuple[ChatService, ChatService, Path]]:
+async def laptops(tmp_path: Path) -> AsyncIterator[tuple[MemoryService, MemoryService, Path]]:
     a = await make_service(tmp_path, "laptop-a")
     b = await make_service(tmp_path, "laptop-b")
     folder = tmp_path / "iCloud" / "Anamnesis"
@@ -67,13 +57,13 @@ def session(ext: str, *texts: str) -> ImportedConversation:
     )
 
 
-def pair(a: ChatService, b: ChatService, folder: Path) -> str:
+def pair(a: MemoryService, b: MemoryService, folder: Path) -> str:
     code = share(a.settings.data_dir, folder)
     join(b.settings.data_dir, folder, code)
     return code
 
 
-async def test_pairing_rules(laptops: tuple[ChatService, ChatService, Path]) -> None:
+async def test_pairing_rules(laptops: tuple[MemoryService, MemoryService, Path]) -> None:
     a, b, folder = laptops
     with pytest.raises(SyncSetupError, match="No Anamnesis memory"):
         join(b.settings.data_dir, folder, "A" * 52)
@@ -97,12 +87,13 @@ async def test_pairing_rules(laptops: tuple[ChatService, ChatService, Path]) -> 
 
 
 async def test_memory_flows_both_ways_without_echo_or_duplicates(
-    laptops: tuple[ChatService, ChatService, Path],
+    laptops: tuple[MemoryService, MemoryService, Path],
 ) -> None:
     a, b, folder = laptops
     pair(a, b, folder)
     await a.import_conversation(session("s1", "how do we rotate the api keys", "use vault"))
-    chat = await a.new_thread(title="Planning")
+    # A chat from the old built-in chat (no external id), as found in existing databases.
+    chat = await a.db.create_thread("Planning")
     await a.db.add_message(chat.id, "user", "remember we ship on fridays")
     await a.remember("Prefers pnpm over npm.", topic="preferences")
 
@@ -120,7 +111,7 @@ async def test_memory_flows_both_ways_without_echo_or_duplicates(
     assert (await exchange(b)).imported == 0  # idempotent
     assert (await exchange(b)).exported == 0  # received memory is never echoed back
 
-    # B continues the same Anamnesis chat and adds to the same note topic.
+    # B adds to the same legacy chat and the same note topic.
     b_chat = next(t for t in await b.list_threads() if t.source == "anamnesis")
     await b.db.add_message(b_chat.id, "assistant", "noted: fridays it is")
     await b.remember("Deploys only via CI.", topic="Preferences")
@@ -140,7 +131,7 @@ async def test_memory_flows_both_ways_without_echo_or_duplicates(
 
 
 async def test_new_computer_gets_everything_and_live_updates(
-    laptops: tuple[ChatService, ChatService, Path], tmp_path: Path
+    laptops: tuple[MemoryService, MemoryService, Path], tmp_path: Path
 ) -> None:
     a, b, folder = laptops
     pair(a, b, folder)
@@ -164,7 +155,7 @@ async def test_new_computer_gets_everything_and_live_updates(
 
 
 async def test_waits_for_missing_segments_and_survives_bad_files(
-    laptops: tuple[ChatService, ChatService, Path],
+    laptops: tuple[MemoryService, MemoryService, Path],
 ) -> None:
     a, b, folder = laptops
     pair(a, b, folder)
@@ -199,7 +190,7 @@ async def test_waits_for_missing_segments_and_survives_bad_files(
 
 
 async def test_unreachable_folder_is_reported_not_fatal(
-    laptops: tuple[ChatService, ChatService, Path],
+    laptops: tuple[MemoryService, MemoryService, Path],
 ) -> None:
     a, b, folder = laptops
     pair(a, b, folder)

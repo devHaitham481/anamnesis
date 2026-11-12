@@ -1,70 +1,71 @@
 # Product Requirements Document (PRD)
 
-## Project Name: NexusAI (Unified Multi-Provider AI Platform & CLI)
+## Project Name: Anamnesis (formerly NexusAI) — one local memory shared by all your AI tools
 
 ---
 
 ## 1. Executive Summary
 
-NexusAI is an open-source, local-first platform designed to unify multiple AI model providers (Claude, Gemini, OpenAI, Ollama) into a single workspace. It provides both a Command Line/TUI interface and a Web Dashboard backed by a persistent local memory layer. This ensures that chat context, session history, and prompt interactions are preserved and searchable across all providers and user interfaces.
+Anamnesis is a local-first, single-purpose memory layer. It collects the conversations you have in the AI tools you already use (Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini) into one searchable store on your machine, and gives every MCP-capable agent read and write access to it. Context from any conversation is available in every other tool, without re-explaining.
+
+**Non-goal:** Anamnesis is not a chat client or model gateway. It never calls an LLM and needs no API keys. (An earlier version had a built-in Claude/Gemini chat; it was removed on 2026-11-12. Chats stored by it remain in existing databases as ordinary memory.)
 
 ---
 
 ## 2. Target Users & Core Value Proposition
 
-- **Developers & Power Users:** Work across multiple CLI tools and LLMs without losing history or re-explaining context.
-- **Privacy-Conscious Builders:** Prefer keeping session databases and embeddings locally on disk.
-- **Multi-Model Testers:** Need to compare answers from Claude 3.5 Sonnet and Gemini 1.5/2.5 Pro using identical chat history.
+- **Developers & power users** who switch between several AI tools and lose context at every switch.
+- **Privacy-conscious users:** history, search index and embedding model stay on disk; cross-device sync is end-to-end encrypted.
 
 ---
 
-## 3. Core Technical Architecture & Specs
+## 3. Architecture
 
-### Module 1: The Context & Memory Core (`/src/core`)
+### Module 1: Memory core (`/src/core`)
 
-- **Database:** SQLite (using `aiosqlite` or `better-sqlite3`) storing raw chat threads, agent messages, provider tags, and system prompts.
-- **Vector Search Engine:** Integrated local vector engine (`LanceDB` or `ChromaDB`) to index session history automatically for hybrid/semantic RAG retrieval.
-- **Model Context Protocol (MCP) Server:** Implement an internal MCP server so terminal instances and sub-agents can automatically query and write to the central memory store.
+- **Storage:** SQLite (`aiosqlite`) holding threads (with `source`, `project`, `external_id`) and messages, with FTS5 keyword search.
+- **Semantic search:** LanceDB with a local embedding model (`fastembed`), merged with keyword hits.
+- **`MemoryService`:** the single entry point for every interface (import, remember, search, browse).
+- **Cross-device sync:** encrypted per-device logs in a synced folder.
 
-### Module 2: Unified Provider Gateway (`/src/providers`)
+### Module 2: Ingestion (`/src/ingest`)
 
-- **API Normalizer:** Utilize `LiteLLM` (or a standardized gateway) to route requests uniformly to Anthropic, Google Gemini, OpenAI, and Ollama.
-- **Streaming Handlers:** Standardize Server-Sent Events (SSE) and terminal stdout chunking.
+- Incremental, idempotent importers for local tool history (Claude Code, Codex, Gemini CLI, Cursor) and data exports (ChatGPT, claude.ai, Gemini Takeout).
+- Background sync with a cross-process lock.
 
-### Module 3: Interfaces (`/src/cli` & `/src/web`)
+### Module 3: Access (`/src/memory_mcp`, `/src/connect.py`)
 
-- **Terminal UI (TUI):** Interactive terminal layout built with Python `Textual` (or Node `Ink`) featuring multi-model switching, Markdown formatting, and context search.
-- **Web Interface:** Lightweight web frontend (FastAPI + Next.js or React) displaying chat sessions live, synchronized with the SQLite database.
+- **MCP server:** `search_memory`, `recent_conversations`, `get_conversation`, `remember`.
+- **`anam connect`:** registers the MCP server with each installed tool.
+
+### Module 4: Browsing (`/src/cli`, `/src/web`)
+
+- **CLI:** `anam sync / import / search / status / connect / share / join`.
+- **TUI (`Textual`)** and **web UI (`FastAPI` + WebSocket)**: read-only memory browsers with search, source filters, rename/delete and live updates.
 
 ---
 
-## 4. Functional Requirements & Milestones
+## 4. Requirements & Milestones
 
-### Milestone 1: Core Database & LiteLLM Gateway
+### Done
 
-- [ ] Initialize SQLite schema for `threads`, `messages`, and `providers`.
-- [ ] Implement `ProviderManager` wrapping LiteLLM for streaming completions.
-- [ ] Write integration test verifying Claude and Gemini queries return unified output structures.
+- [x] Storage, keyword + semantic search, idempotent imports with in-place schema migration.
+- [x] Importers for Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini Takeout.
+- [x] MCP server and `anam connect` for Claude Code, Claude Desktop, Cursor, Gemini CLI, Codex.
+- [x] Background sync; TUI and web memory browsers.
+- [x] Encrypted cross-device memory (`anam share` / `join` / `devices`).
+- [x] Single purpose: chat gateway removed.
 
-### Milestone 2: Context Memory & RAG Layer
+### Next
 
-- [ ] Set up vector database (`LanceDB`) to auto-embed user and assistant exchanges.
-- [ ] Create context retrieval pipeline that injects relevant past chat snippets when prompting.
-
-### Milestone 3: Terminal UI (TUI)
-
-- [ ] Build terminal interface with model selection, active thread list, and live streaming response box.
-- [ ] Add slash-commands: `/model <name>`, `/history`, `/search <query>`.
-
-### Milestone 4: Web UI & Multi-Device Sync
-
-- [ ] Fast API / Node REST + WebSocket server exposing core database and streaming endpoints.
-- [ ] Web chat UI that mirrors terminal chats in real-time.
+- [ ] Browser extension for live capture from ChatGPT / claude.ai / Gemini web.
+- [ ] Propagate deletions across devices.
+- [ ] Optional hosted relay for cross-device sync.
 
 ---
 
 ## 5. Non-Functional Requirements
 
-- **Performance:** DB lookups and vector checks must complete in under 50ms.
-- **Data Privacy:** All database and vector indexes stay local by default.
-- **Self-Documenting:** Clean modular architecture with strict typing (`TypeScript` or Python `Pydantic`).
+- **Performance:** DB lookups and searches complete in under 50 ms; imports never block searching (text first, embeddings in the background).
+- **Privacy:** all data and indexes stay local by default; nothing is sent to any model provider.
+- **Quality:** modular, strictly typed (Pydantic, mypy strict), tested offline.

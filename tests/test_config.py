@@ -1,51 +1,43 @@
 from pathlib import Path
 
-import pytest
-
-from src.config import DEFAULT_CLAUDE_MODEL, MissingAPIKeyError, load_settings
+from src.config import DEFAULT_EMBEDDING_MODEL, Settings, load_settings
 
 
-def test_loads_keys_from_env_file(tmp_path: Path) -> None:
-    env = tmp_path / ".env"
-    env.write_text("ANTHROPIC_API_KEY=sk-ant\nGEMINI_API_KEY=gem\n")
-    s = load_settings(env, environ={})
-    assert s.require_key("anthropic") == "sk-ant"
-    assert s.require_key("gemini") == "gem"
-    assert s.claude_model == DEFAULT_CLAUDE_MODEL
+def test_defaults_need_no_api_keys(tmp_path: Path) -> None:
+    s = load_settings(tmp_path / "nope.env", environ={})
+    assert s.semantic_search and s.memory_sync
+    assert s.embedding_model == DEFAULT_EMBEDDING_MODEL
+    assert not any("key" in name for name in Settings.model_fields)  # no provider keys at all
 
 
 def test_process_env_overrides_file(tmp_path: Path) -> None:
     env = tmp_path / ".env"
-    env.write_text("ANTHROPIC_API_KEY=from-file\n")
-    s = load_settings(
-        env, environ={"ANTHROPIC_API_KEY": "from-env", "ANAMNESIS_GEMINI_MODEL": "gemini/x"}
-    )
-    assert s.require_key("anthropic") == "from-env"
-    assert s.gemini_model == "gemini/x"
+    env.write_text("ANAMNESIS_MEMORY_SYNC_INTERVAL=30\nANAMNESIS_SEMANTIC_SEARCH=false\n")
+    s = load_settings(env, environ={"ANAMNESIS_MEMORY_SYNC_INTERVAL": "5"})
+    assert s.memory_sync_interval == 5.0
+    assert s.semantic_search is False
 
 
-def test_missing_and_blank_keys_raise(tmp_path: Path) -> None:
-    s = load_settings(tmp_path / "nope.env", environ={"GEMINI_API_KEY": "  "})
-    with pytest.raises(MissingAPIKeyError, match="ANTHROPIC_API_KEY"):
-        s.require_key("anthropic")
-    with pytest.raises(MissingAPIKeyError, match="GEMINI_API_KEY"):
-        s.require_key("gemini")
+def test_old_keys_in_env_file_are_ignored(tmp_path: Path) -> None:
+    """A .env from the chat-gateway days must still load."""
+    env = tmp_path / ".env"
+    env.write_text("ANTHROPIC_API_KEY=sk-old\nANAMNESIS_DEFAULT_MODEL=gemini\n")
+    s = load_settings(env, environ={})
+    assert "sk-old" not in repr(s)
 
 
 def test_secrets_not_leaked_in_repr() -> None:
-    s = load_settings(None, environ={"ANTHROPIC_API_KEY": "super-secret"})
-    assert "super-secret" not in repr(s)
+    s = load_settings(None, environ={"ANAMNESIS_AUTH_TOKEN": "super-secret"})
+    assert s.auth_token is not None and "super-secret" not in repr(s)
 
 
-def test_legacy_nexus_env_names_still_work() -> None:
-    from src.config import load_settings
-
+def test_legacy_env_names_still_work() -> None:
+    s = load_settings(env_file=None, environ={"NEXUS_RAG": "off", "NEXUS_RAG_MIN_SCORE": "0.4"})
+    assert (s.semantic_search, s.semantic_min_score) == (False, 0.4)
     s = load_settings(
-        env_file=None, environ={"NEXUS_RAG_TOP_K": "9", "ANAMNESIS_HISTORY_LIMIT": "7"}
+        env_file=None, environ={"ANAMNESIS_RAG": "off", "ANAMNESIS_SEMANTIC_SEARCH": "on"}
     )
-    assert (s.rag_top_k, s.history_limit) == (9, 7)
-    s = load_settings(env_file=None, environ={"NEXUS_RAG_TOP_K": "9", "ANAMNESIS_RAG_TOP_K": "3"})
-    assert s.rag_top_k == 3
+    assert s.semantic_search is True  # the new name wins
 
 
 def test_migrate_legacy_data_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]

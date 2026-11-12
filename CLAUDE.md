@@ -3,10 +3,10 @@
 ## 1. Project Stack & Principles
 
 - **Language:** Python 3.11+ (or Node.js 20+ TypeScript — check root setup)
-- **Multi-Model Routing:** `litellm`
+- **Purpose:** a single-purpose local memory shared by all AI tools (MCP server + importers). It is not a chat client and never calls a model.
 - **Database:** SQLite + LanceDB (Vector)
 - **TUI Framework:** `Textual`
-- **Backend API:** `FastAPI` + WebSockets
+- **Backend API:** `FastAPI` + WebSockets (memory browser)
 - **Execution Style:** Local-first, modular, fully typed, heavily tested.
 
 ## 2. Autonomous Execution Workflow
@@ -30,6 +30,6 @@ When assigned a task or milestone:
 
 ## 4. Quality Rules
 
-- No hardcoded API keys; always load from `.env`.
-- Every provider request MUST route through the unified provider interface.
+- No hardcoded secrets; configuration comes from `.env` / the environment.
+- Every interface (MCP, CLI, TUI, web) goes through `MemoryService`; don't add chat or model-calling features.
 - Keep terminal UI logic isolated from database operations.

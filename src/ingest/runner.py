@@ -10,7 +10,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.core.chat import ChatService
+from src.core.memory import MemoryService
 from src.core.models import ImportedConversation
 from src.ingest.base import Source, file_signature
 
@@ -57,7 +57,7 @@ def _parse_all(source: Source, path: Path) -> list[ImportedConversation]:
 
 
 async def store(
-    service: ChatService, convs: Sequence[ImportedConversation], report: ScanReport
+    service: MemoryService, convs: Sequence[ImportedConversation], report: ScanReport
 ) -> None:
     for conv in convs:
         _, added = await service.import_conversation(conv, index=False)
@@ -68,7 +68,7 @@ async def store(
 
 
 async def scan(
-    service: ChatService,
+    service: MemoryService,
     sources: Sequence[Source] | None = None,
     force: bool = False,
     index: bool = True,
@@ -136,7 +136,7 @@ def sync_lock(data_dir: Path) -> Iterator[bool]:
         os.close(fd)
 
 
-async def sync_once(service: ChatService, sources: Sequence[Source] | None = None) -> ScanReport:
+async def sync_once(service: MemoryService, sources: Sequence[Source] | None = None) -> ScanReport:
     """One background sync pass (import + embed), skipped if another process is syncing."""
     with sync_lock(service.settings.data_dir) as acquired:
         if not acquired:
@@ -147,7 +147,7 @@ async def sync_once(service: ChatService, sources: Sequence[Source] | None = Non
         return report
 
 
-async def exchange_with_devices(service: ChatService, report: ScanReport) -> None:
+async def exchange_with_devices(service: MemoryService, report: ScanReport) -> None:
     """If cross-device sync is on, publish local memory and import other devices' memory."""
     from src.core.devices import exchange
 
@@ -161,7 +161,7 @@ async def exchange_with_devices(service: ChatService, report: ScanReport) -> Non
 
 
 async def watch(
-    service: ChatService,
+    service: MemoryService,
     interval: float = 60.0,
     sources: Sequence[Source] | None = None,
     stop: asyncio.Event | None = None,
@@ -181,7 +181,7 @@ async def watch(
             pass
 
 
-async def import_file(service: ChatService, path: Path, index: bool = True) -> ScanReport:
+async def import_file(service: MemoryService, path: Path, index: bool = True) -> ScanReport:
     """Import a data export (ChatGPT / claude.ai / Gemini Takeout), as .zip, .json or .html."""
     from src.ingest.exports import parse_export
 

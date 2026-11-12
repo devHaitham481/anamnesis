@@ -45,3 +45,7 @@
 - [x] Memory browser: source badges and filters in the TUI and web UI, plus `anam sync/import/search/status`.
 - [x] Cross-device memory: encrypted per-device logs in a synced folder (`anam share` / `join` / `devices`).
 - [ ] Browser extension for live capture from ChatGPT / claude.ai / Gemini web (exports cover this for now).
+
+### Sprint 6: Single Purpose
+
+- [x] Remove the chat gateway (LiteLLM router, chat service, model switching, chat UI in TUI and web, API keys). The TUI and web UI are now memory browsers only.

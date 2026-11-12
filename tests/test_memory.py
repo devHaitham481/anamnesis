@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from src.core.chat import ChatService
 from src.core.db import Database
+from src.core.memory import MemoryService
 from src.core.models import ImportedConversation, ImportedMessage
 from src.ingest.claude_code import ClaudeCodeSource
 from src.ingest.runner import scan, sync_lock, sync_once
@@ -41,7 +41,7 @@ def conv(
     )
 
 
-async def test_import_is_idempotent_and_appends_only_new(service: ChatService) -> None:
+async def test_import_is_idempotent_and_appends_only_new(service: MemoryService) -> None:
     t1, n1 = await service.import_conversation(conv("s1", "first question here", "an answer"))
     assert n1 == 2 and t1.source == "claude-code" and t1.title == "first question here"
     _, again = await service.import_conversation(conv("s1", "first question here", "an answer"))
@@ -57,7 +57,7 @@ async def test_import_is_idempotent_and_appends_only_new(service: ChatService) -
     assert t3.id != t1.id
 
 
-async def test_search_filters_by_source_and_project(service: ChatService) -> None:
+async def test_search_filters_by_source_and_project(service: MemoryService) -> None:
     await service.import_conversation(
         conv("a", "postgres migration plan for billing", source="claude-code", project="/p/api")
     )
@@ -76,14 +76,14 @@ async def test_search_filters_by_source_and_project(service: ChatService) -> Non
     assert await service.source_counts() == {"claude-code": 1, "chatgpt": 1}
 
 
-async def test_keyword_search_ignores_filler_words(service: ChatService) -> None:
+async def test_keyword_search_ignores_filler_words(service: MemoryService) -> None:
     await service.import_conversation(conv("a", "why did we do this and what was it for"))
     await service.import_conversation(conv("b", "we picked lancedb because it is embedded"))
     hits = await service.db.search_messages("why did we pick lancedb", limit=5)
     assert [h.content for h in hits] == ["we picked lancedb because it is embedded"]
 
 
-async def test_remember_appends_to_topic_note(service: ChatService) -> None:
+async def test_remember_appends_to_topic_note(service: MemoryService) -> None:
     t1 = await service.remember("User prefers pnpm over npm in all repos.", topic="preferences")
     t2 = await service.remember("Deploys go through GitHub Actions only.", topic="Preferences")
     assert t1.id == t2.id and t1.source == "note" and t1.title == "Notes: preferences"
@@ -92,7 +92,7 @@ async def test_remember_appends_to_topic_note(service: ChatService) -> None:
         await service.remember("   ")
 
 
-async def test_short_messages_are_not_embedded(service: ChatService) -> None:
+async def test_short_messages_are_not_embedded(service: MemoryService) -> None:
     thread, _ = await service.import_conversation(
         conv("s", "yes", "a substantive answer about caching layers"), index=True
     )
@@ -123,7 +123,7 @@ async def test_old_database_is_migrated_in_place(tmp_path: Path) -> None:
         (t,) = await db.list_threads()
         assert (t.title, t.source, t.project) == ("Old chat", "anamnesis", None)
         assert [m.content for m in await db.get_messages("t1")] == ["hi"]
-        thread, added = await db.import_conversation(conv("x", "imported text"), model="claude")
+        thread, added = await db.import_conversation(conv("x", "imported text"))
         assert len(added) == 1 and thread.source == "claude-code"
     async with Database(path) as db:  # reopening an already-migrated db is a no-op
         assert len(await db.list_threads()) == 2
@@ -152,7 +152,7 @@ def write_session(root: Path, name: str, *texts: str) -> Path:
     return path
 
 
-async def test_scan_is_incremental(service: ChatService, tmp_path: Path) -> None:
+async def test_scan_is_incremental(service: MemoryService, tmp_path: Path) -> None:
     root = tmp_path / "projects"
     path = write_session(root, "s1", "how do we deploy the api service")
     sources = [ClaudeCodeSource(root)]
@@ -169,7 +169,7 @@ async def test_scan_is_incremental(service: ChatService, tmp_path: Path) -> None
     assert (await scan(service, sources)).errors == []
 
 
-async def test_scan_survives_a_broken_source(service: ChatService, tmp_path: Path) -> None:
+async def test_scan_survives_a_broken_source(service: MemoryService, tmp_path: Path) -> None:
     class Broken:
         name = "broken"
 
@@ -185,7 +185,7 @@ async def test_scan_survives_a_broken_source(service: ChatService, tmp_path: Pat
     assert report.messages_added == 1 and report.errors == ["broken: nope"]
 
 
-async def test_sync_lock_is_exclusive(service: ChatService, tmp_path: Path) -> None:
+async def test_sync_lock_is_exclusive(service: MemoryService, tmp_path: Path) -> None:
     root = tmp_path / "projects"
     write_session(root, "s1", "some history worth keeping")
     with sync_lock(service.settings.data_dir) as first:
@@ -204,7 +204,7 @@ def _text(result: object) -> str:
     return "\n".join(c.text for c in result.content)  # type: ignore[attr-defined]
 
 
-async def test_mcp_tools(service: ChatService) -> None:
+async def test_mcp_tools(service: MemoryService) -> None:
     thread, _ = await service.import_conversation(
         conv(
             "s1",
@@ -249,7 +249,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
     data = tmp_path / "data"
     async with Database(data / "anamnesis.db") as db:
         await db.import_conversation(
-            conv("s1", "the staging database lives in eu-west-1", title="Infra notes"), "claude"
+            conv("s1", "the staging database lives in eu-west-1", title="Infra notes")
         )
     params = StdioServerParameters(
         command=sys.executable,
@@ -257,7 +257,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
         cwd=str(tmp_path),  # not the project dir: must work from anywhere
         env={
             "ANAMNESIS_DATA_DIR": str(data),
-            "ANAMNESIS_RAG": "false",
+            "ANAMNESIS_SEMANTIC_SEARCH": "false",
             "ANAMNESIS_MEMORY_SYNC": "false",
         },
     )

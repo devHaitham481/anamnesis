@@ -1,4 +1,4 @@
-// Anamnesis web client: threads, live chat over WebSocket, search, model switching.
+// Anamnesis web client: browse and search the shared memory, with live updates over WebSocket.
 (function () {
   "use strict";
 
@@ -17,11 +17,7 @@
   const state = {
     threads: [],
     threadId: null,
-    models: [],
-    model: null,
     shown: new Set(),       // message ids rendered in the current thread
-    streaming: new Map(),   // thread_id -> {el, text, model}
-    pendingSend: null,      // text waiting for a thread to be created
     ws: null,
     retry: 0,
     source: "",             // thread-list / search filter ("" = all tools)
@@ -54,13 +50,21 @@
                  : d.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 
+  function fmtDateTime(ts) {
+    return new Date(ts * 1000).toLocaleString([], {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  function currentThread() { return state.threads.find((t) => t.id === state.threadId); }
+
   function renderThreads() {
     const ul = $("#threads");
     ul.textContent = "";
     if (!state.threads.length) {
       const li = document.createElement("li");
       li.className = "muted-item";
-      li.textContent = "No threads yet";
+      li.textContent = "No conversations yet";
       ul.appendChild(li);
     }
     for (const t of state.threads) {
@@ -75,40 +79,24 @@
       meta.textContent = sourceLabel(t.source) + " · " + fmtTime(t.updated_at);
       const del = document.createElement("button");
       del.className = "thread-del";
-      del.title = "Delete thread";
-      del.setAttribute("aria-label", "Delete thread");
+      del.title = "Delete from memory";
+      del.setAttribute("aria-label", "Delete from memory");
       del.textContent = "×";
       del.addEventListener("click", (e) => { e.stopPropagation(); deleteThread(t); });
       li.append(title, meta, del);
       li.addEventListener("click", () => openThread(t.id));
       ul.appendChild(li);
     }
-    const current = state.threads.find((t) => t.id === state.threadId);
-    $("#thread-title").textContent = current ? current.title : "New chat";
-    document.title = current ? current.title + " · Anamnesis" : "Anamnesis";
+    renderHeader();
   }
 
-  function renderModels() {
-    const sel = $("#model");
-    sel.textContent = "";
-    for (const m of state.models) {
-      const opt = document.createElement("option");
-      opt.value = m.name;
-      opt.textContent = m.available ? m.name : m.name + " (no key)";
-      sel.appendChild(opt);
-    }
-    sel.value = state.model;
-    updateBanner();
-  }
-
-  function updateBanner(text) {
-    const banner = $("#banner");
-    const info = state.models.find((m) => m.name === state.model);
-    const msg = text || (info && !info.available
-      ? info.missing_key + " is not set — add it to .env and restart the server to use " + info.name + "."
-      : "");
-    banner.textContent = msg;
-    banner.hidden = !msg;
+  function renderHeader() {
+    const t = currentThread();
+    $("#thread-title").textContent = t ? t.title : "Anamnesis";
+    $("#thread-meta").textContent = t
+      ? [sourceLabel(t.source), t.project].filter(Boolean).join(" · ")
+      : "";
+    document.title = t ? t.title + " · Anamnesis" : "Anamnesis";
   }
 
   function scrollToBottom(force) {
@@ -131,9 +119,12 @@
   }
 
   function messageHeader(m) {
-    if (m.role === "user") return "You";
-    const model = (m.model || "assistant").split("/").pop();
-    return m.provider ? model + " · " + m.provider : model;
+    const t = currentThread();
+    const source = t ? t.source : "";
+    let who;
+    if (m.role === "user") who = source === "note" ? "Note" : "You";
+    else who = (m.model || "").split("/").pop() || sourceLabel(source) || "Assistant";
+    return who + " · " + fmtDateTime(m.created_at);
   }
 
   function addMessage(m) {
@@ -146,11 +137,9 @@
     // Keep chronological order even if events arrive out of order.
     const later = Array.from(box.querySelectorAll("article.msg[data-id]"))
       .find((x) => Number(x.dataset.id) > m.id);
-    const stream = state.streaming.get(m.thread_id);
     if (later) box.insertBefore(el, later);
-    else if (stream && stream.el && stream.el.isConnected && m.role === "user") box.insertBefore(el, stream.el);
     else box.appendChild(el);
-    scrollToBottom(m.role === "user");
+    scrollToBottom(false);
   }
 
   function addNote(text, kind) {
@@ -163,42 +152,8 @@
   function clearMessages() {
     const box = $("#messages");
     box.querySelectorAll("article").forEach((a) => a.remove());
-    $("#empty").hidden = false;
+    $("#empty").hidden = state.threads.length > 0;
     state.shown = new Set();
-  }
-
-  function setBusy() {
-    const busy = state.threadId !== null && state.streaming.has(state.threadId);
-    $("#send").disabled = busy;
-    $("#send").textContent = busy ? "…" : "Send";
-  }
-
-  // ---------- streaming ----------
-
-  function streamStart(threadId, model) {
-    const s = { el: null, text: "", model: model };
-    state.streaming.set(threadId, s);
-    setBusy();
-  }
-
-  function streamDelta(threadId, text) {
-    let s = state.streaming.get(threadId);
-    if (!s) { s = { el: null, text: "", model: "" }; state.streaming.set(threadId, s); }
-    s.text += text;
-    if (threadId !== state.threadId) return;
-    if (!s.el || !s.el.isConnected) {
-      s.el = bubble("assistant streaming", (s.model || "assistant") + " · streaming…");
-      $("#messages").appendChild(s.el);
-    }
-    s.el.querySelector(".msg-body").innerHTML = md.render(s.text);
-    scrollToBottom(false);
-  }
-
-  function streamFinish(threadId) {
-    const s = state.streaming.get(threadId);
-    if (s && s.el) s.el.remove();
-    state.streaming.delete(threadId);
-    setBusy();
   }
 
   // ---------- actions ----------
@@ -208,8 +163,10 @@
     const select = $("#source-filter");
     const keep = state.source;
     select.length = 1;  // keep "All tools"
+    let total = 0;
     for (const s of sources) {
       state.sourceLabels[s.name] = s.label;
+      total += s.threads;
       const opt = document.createElement("option");
       opt.value = s.name;
       opt.textContent = s.label + " (" + s.threads + ")";
@@ -217,13 +174,14 @@
     }
     select.value = sources.some((s) => s.name === keep) ? keep : "";
     state.source = select.value;
+    $("#memory-count").textContent = total ? total + " conversations" : "";
   }
 
   async function loadThreads() {
     const requestedFor = state.threadId;
     const filter = state.source;
     const threads = await api("/api/threads" + (filter ? "?source=" + encodeURIComponent(filter) : ""));
-    // A newer thread may have been created/opened (or the filter changed) while in flight.
+    // Another thread may have been opened (or the filter changed) while in flight.
     if (state.threadId !== requestedFor || state.source !== filter) return;
     state.threads = threads;
     // With a filter active the open thread may just be hidden, not deleted.
@@ -237,39 +195,26 @@
 
   async function openThread(id) {
     closeSidebarOnMobile();
-    const t = state.threads.find((x) => x.id === id) || await api("/api/threads/" + id).catch(() => null);
-    if (!t) { addNote("That thread no longer exists.", "error"); return; }
+    let t = state.threads.find((x) => x.id === id);
+    if (!t) {
+      t = await api("/api/threads/" + id).catch(() => null);
+      if (t) state.threads.push(t);  // e.g. a search hit hidden by the source filter
+    }
+    if (!t) { addNote("That conversation no longer exists.", "error"); return; }
     state.threadId = id;
     if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
     clearMessages();
-    if (state.models.some((m) => m.name === t.model)) { state.model = t.model; renderModels(); }
+    $("#empty").hidden = true;
     renderThreads();
     const msgs = await api("/api/threads/" + id + "/messages?limit=500");
     if (state.threadId !== id) return;
     msgs.forEach(addMessage);
-    const s = state.streaming.get(id);
-    if (s && s.text) streamDelta(id, "");
+    if (!msgs.length) addNote("(no messages)");
     scrollToBottom(true);
-    setBusy();
-    $("#input").focus();
-  }
-
-  let creating = null; // in-flight newThread() promise, so a fast send targets the new thread
-
-  function newThread() {
-    if (!creating) {
-      creating = (async () => {
-        const t = await api("/api/threads", { method: "POST", body: JSON.stringify({ model: state.model }) });
-        state.threads.unshift(t);
-        await openThread(t.id);
-        return t;
-      })().finally(() => { creating = null; });
-    }
-    return creating;
   }
 
   async function deleteThread(t) {
-    if (!confirm('Delete "' + t.title + '"? This cannot be undone.')) return;
+    if (!confirm('Delete "' + t.title + '" from memory? This cannot be undone.')) return;
     try {
       await api("/api/threads/" + t.id, { method: "DELETE" });
       await loadThreads();
@@ -277,39 +222,14 @@
   }
 
   async function renameThread() {
-    const t = state.threads.find((x) => x.id === state.threadId);
+    const t = currentThread();
     if (!t) return;
-    const title = prompt("Rename thread", t.title);
+    const title = prompt("Rename conversation", t.title);
     if (!title || !title.trim() || title === t.title) return;
     try {
       await api("/api/threads/" + t.id, { method: "PATCH", body: JSON.stringify({ title: title.trim() }) });
       await loadThreads();
     } catch (e) { addNote(e.message, "error"); }
-  }
-
-  async function changeModel(name) {
-    state.model = name;
-    updateBanner();
-    if (!state.threadId) return;
-    try {
-      await api("/api/threads/" + state.threadId, { method: "PATCH", body: JSON.stringify({ model: name }) });
-      await loadThreads();
-    } catch (e) { addNote(e.message, "error"); }
-  }
-
-  async function send(text) {
-    const info = state.models.find((m) => m.name === state.model);
-    if (info && !info.available) { updateBanner(); return false; }
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-      addNote("Not connected to the server — reconnecting…", "error");
-      return false;
-    }
-    if (creating) await creating;
-    if (!state.threadId) await newThread();
-    if (state.streaming.has(state.threadId)) return false;
-    streamStart(state.threadId, state.model);
-    state.ws.send(JSON.stringify({ type: "send", thread_id: state.threadId, content: text, model: state.model }));
-    return true;
   }
 
   async function runSearch(q) {
@@ -355,7 +275,7 @@
     if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.remove("sidebar-open");
   }
 
-  // ---------- WebSocket ----------
+  // ---------- live updates ----------
 
   function setConn(ok, text) {
     $("#conn").classList.toggle("ok", ok);
@@ -372,6 +292,7 @@
       setConn(true, "Live");
       // Catch up on anything missed while disconnected.
       try {
+        await loadSources();
         await loadThreads();
         if (state.threadId) {
           const msgs = await api("/api/threads/" + state.threadId + "/messages?limit=500");
@@ -381,8 +302,6 @@
     };
     ws.onmessage = (ev) => handleEvent(JSON.parse(ev.data));
     ws.onclose = () => {
-      // Keep streaming threads marked busy: the server-side turn keeps running. The
-      // "active" event sent on reconnect tells us which ones actually finished.
       setConn(false, "Reconnecting…");
       const delay = Math.min(1000 * 2 ** state.retry++, 15000);
       setTimeout(connect, delay);
@@ -402,70 +321,20 @@
     switch (e.type) {
       case "message":
         addMessage(e.message);
-        if (e.message.role === "assistant" && state.streaming.has(e.message.thread_id)) {
-          const s = state.streaming.get(e.message.thread_id);
-          if (s.el) s.el.remove();
-          s.el = null;
-        }
         refreshThreadsSoon();
         break;
-      case "stream_start":
-        if (!state.streaming.has(e.thread_id)) streamStart(e.thread_id, e.model);
-        break;
-      case "delta":
-        streamDelta(e.thread_id, e.text);
-        break;
-      case "stream_end":
-        streamFinish(e.thread_id);
-        if (e.error && e.thread_id === state.threadId) addNote(e.error, "error");
-        refreshThreadsSoon();
-        break;
-      case "active": {
-        const active = new Set(e.thread_ids);
-        for (const id of Array.from(state.streaming.keys())) {
-          if (!active.has(id)) streamFinish(id);
-        }
-        for (const id of active) {
-          if (!state.streaming.has(id)) streamStart(id, "");
-        }
-        break;
-      }
       case "threads_changed":
         refreshThreadsSoon();
         break;
       case "error":
-        if (e.thread_id) streamFinish(e.thread_id);
-        if (!e.thread_id || e.thread_id === state.threadId) addNote(e.detail, "error");
+        addNote(e.detail, "error");
         break;
     }
   }
 
   // ---------- wiring ----------
 
-  function autosize() {
-    const ta = $("#input");
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 240) + "px";
-  }
-
-  async function submitComposer(ev) {
-    if (ev) ev.preventDefault();
-    const ta = $("#input");
-    const text = ta.value.trim();
-    if (!text) return;
-    try {
-      if (await send(text)) { ta.value = ""; autosize(); }
-    } catch (e) { addNote(e.message, "error"); }
-  }
-
   async function init() {
-    $("#composer").addEventListener("submit", submitComposer);
-    $("#input").addEventListener("input", autosize);
-    $("#input").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) submitComposer(e);
-    });
-    $("#new-thread").addEventListener("click", () => newThread().catch((e) => addNote(e.message, "error")));
-    $("#model").addEventListener("change", (e) => changeModel(e.target.value));
     $("#thread-title").addEventListener("dblclick", renameThread);
     $("#search-form").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -486,24 +355,23 @@
     });
     $("#main").addEventListener("click", () => document.body.classList.remove("sidebar-open"));
     document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "n") {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+      if (e.key === "/" && !typing) {
         e.preventDefault();
-        newThread().catch((err) => addNote(err.message, "error"));
+        document.body.classList.add("sidebar-open");
+        $("#search").focus();
       }
     });
 
     try {
-      const info = await api("/api/models");
-      state.models = info.models;
-      state.model = info.default;
-      renderModels();
       await loadSources().catch(() => {});
       await loadThreads();
       const wanted = location.hash.slice(1);
-      if (wanted && state.threads.some((t) => t.id === wanted)) await openThread(wanted);
+      if (wanted) await openThread(wanted);
       else if (state.threads.length) await openThread(state.threads[0].id);
+      else $("#empty").hidden = false;
     } catch (e) {
-      updateBanner("Could not reach the Anamnesis server: " + e.message);
+      addNote("Could not reach the Anamnesis server: " + e.message, "error");
     }
     connect();
   }

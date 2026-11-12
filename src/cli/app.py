@@ -1,6 +1,8 @@
-"""Anamnesis Textual TUI: thread sidebar, streaming chat canvas, model switching, slash commands.
+"""Anamnesis Textual TUI: a browser for the shared memory.
 
-All data access goes through `ChatService`; this module only handles presentation and input.
+Sidebar of conversations from every tool, a read-only conversation view, and one input line:
+plain text searches all memory, slash commands browse and manage it. All data access goes
+through `MemoryService`; this module only handles presentation and input.
 """
 
 from __future__ import annotations
@@ -14,23 +16,24 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Footer, Header, Input, Label, ListView, Select, Static
+from textual.widgets import Footer, Header, Input, Label, ListView, Static
 
 from src.cli.commands import Command, CommandError, help_text, is_command, parse_command
 from src.cli.widgets import MessageView, ThreadItem
 from src.config import Settings, load_settings
-from src.core.chat import AssistantSaved, ChatService, Delta, UserSaved
 from src.core.db import ThreadNotFoundError
+from src.core.memory import MemoryService
 from src.core.models import SOURCE_LABELS, Message, Thread
-from src.providers.router import ProviderError
 
 log = logging.getLogger(__name__)
 
 MAX_RENDERED_MESSAGES = 200
 DELETE_CONFIRM_SECONDS = 10.0
 EMPTY_HINT = (
-    "Start typing to begin a new conversation.\n\n"
-    "Ctrl+N new thread · Ctrl+T switch model · /help for commands"
+    "Nothing in memory yet.\n\n"
+    "Run /sync to import your Claude Code, Codex, Gemini CLI and Cursor history, or\n"
+    "`anam import <export.zip>` for ChatGPT, claude.ai and Gemini exports.\n\n"
+    "/help for commands"
 )
 
 
@@ -38,27 +41,24 @@ class AnamnesisApp(App[None]):
     TITLE = "Anamnesis"
     CSS_PATH = "app.tcss"
     BINDINGS = [
-        Binding("ctrl+n", "new_thread", "New thread"),
-        Binding("ctrl+t", "toggle_model", "Toggle model"),
-        Binding("ctrl+l", "focus_threads", "Threads"),
-        Binding("escape", "focus_prompt", "Prompt", show=False),
+        Binding("ctrl+l", "focus_threads", "Conversations"),
+        Binding("ctrl+f", "focus_prompt", "Search"),
+        Binding("escape", "focus_prompt", "Search", show=False),
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
-    def __init__(self, settings: Settings | None = None, service: ChatService | None = None):
+    def __init__(self, settings: Settings | None = None, service: MemoryService | None = None):
         super().__init__()
         self.settings = settings or load_settings()
-        self.service: ChatService | None = service
+        self.service: MemoryService | None = service
         self._owns_service = service is None
         self.thread_id: str | None = None
-        self.model: str = self.settings.default_model
-        self._thread_model: str | None = None
+        self._thread_source: str | None = None
         self._displayed: set[int] = set()
         self._cursor = 0
         self._threads_sig: tuple[int, float, int] | None = None
-        # Serializes sidebar rebuilds: the poller and a finished reply can both trigger one.
+        # Serializes sidebar rebuilds: the poller and a sync can both trigger one.
         self._threads_lock = asyncio.Lock()
-        self._streaming: str | None = None
         self._polling = False
         self._listing: list[str] = []
         self._delete_armed_at = 0.0
@@ -69,22 +69,20 @@ class AnamnesisApp(App[None]):
         yield Header()
         with Horizontal(id="body"):
             with Vertical(id="sidebar"):
-                yield Label("THREADS", id="sidebar-title")
+                yield Label("CONVERSATIONS", id="sidebar-title")
                 yield ListView(id="threads")
             with Vertical(id="main"):
-                with Horizontal(id="toolbar"):
-                    yield Select[str]([], id="model", allow_blank=True, prompt="model")
-                    yield Static("Loading memory…", id="status")
-                yield VerticalScroll(id="chat")
+                yield Static("Loading memory…", id="status")
+                yield VerticalScroll(id="view")
                 yield Input(placeholder="Loading…", id="prompt", disabled=True)
         yield Footer()
 
     @property
-    def chat(self) -> VerticalScroll:
-        return self.query_one("#chat", VerticalScroll)
+    def view(self) -> VerticalScroll:
+        return self.query_one("#view", VerticalScroll)
 
     @property
-    def svc(self) -> ChatService:
+    def svc(self) -> MemoryService:
         if self.service is None:
             raise RuntimeError("Service not ready")
         return self.service
@@ -98,19 +96,12 @@ class AnamnesisApp(App[None]):
     async def _initialize(self) -> None:
         if self.service is None:
             try:
-                self.service = await ChatService.create(self.settings)
+                self.service = await MemoryService.create(self.settings)
             except Exception as e:
                 log.exception("startup failed")
                 self.query_one("#status", Static).update(f"Startup failed: {e}")
                 return
-        svc = self.svc
-        if self.model not in svc.models:
-            self.model = svc.default_model
-        select = self.query_one("#model", Select)
-        select.set_options([(m, m) for m in svc.models])
-        with select.prevent(Select.Changed):
-            select.value = self.model
-        self._update_status()
+        await self._update_status()
 
         threads = await self._refresh_threads()
         if threads:
@@ -119,7 +110,7 @@ class AnamnesisApp(App[None]):
             self._show_empty()
         prompt = self.query_one("#prompt", Input)
         prompt.disabled = False
-        prompt.placeholder = "Message Anamnesis…  (/help for commands)"
+        prompt.placeholder = "Search all memory…  (/help for commands)"
         prompt.focus()
         self.set_interval(self.settings.sync_interval, self._poll)
         if self.settings.memory_sync:
@@ -156,33 +147,29 @@ class AnamnesisApp(App[None]):
 
     # ---------- status / helpers ----------
 
-    def _update_status(self) -> None:
-        status = self.query_one("#status", Static)
+    async def _update_status(self) -> None:
         if self.service is None:
             return
-        missing = self.svc.missing_key(self.model)
-        memory = "semantic + keyword memory" if self.svc.index else "keyword memory only"
-        if missing:
-            status.update(f"⚠ {missing} not set in .env — {self.model} unavailable")
-            status.add_class("warning")
-        else:
-            status.update(f"{self.model} · {memory}")
-            status.remove_class("warning")
+        counts = await self.svc.source_counts()
+        mode = "semantic + keyword search" if self.svc.index else "keyword search only"
+        self.query_one("#status", Static).update(
+            f"{sum(counts.values())} conversations from {len(counts)} sources · {mode}"
+        )
 
     def _show_empty(self) -> None:
-        self.chat.remove_children()
-        self.chat.mount(Static(EMPTY_HINT, id="empty"))
+        self.view.remove_children()
+        self.view.mount(Static(EMPTY_HINT, id="empty"))
         self.sub_title = ""
 
     async def _mount(self, view: MessageView) -> None:
-        for empty in self.chat.query("#empty"):
+        for empty in self.view.query("#empty"):
             await empty.remove()
-        await self.chat.mount(view)
-        self.chat.scroll_end(animate=False)
+        await self.view.mount(view)
+        self.view.scroll_end(animate=False)
 
-    async def _mount_message(self, msg: Message) -> None:
+    async def _mount_message(self, msg: Message, source: str | None = None) -> None:
         self._displayed.add(msg.id)
-        await self._mount(MessageView.from_message(msg))
+        await self._mount(MessageView.from_message(msg, source))
 
     async def _note(self, markdown: str, kind: str = "note") -> None:
         await self._mount(MessageView(kind, "Anamnesis" if kind == "note" else "Error", markdown))
@@ -209,6 +196,7 @@ class AnamnesisApp(App[None]):
             for t in threads:
                 if t.id == self.thread_id:
                     self.sub_title = t.title
+        await self._update_status()
         return threads
 
     def _mark_current(self) -> None:
@@ -227,32 +215,25 @@ class AnamnesisApp(App[None]):
             await self._refresh_threads()
             return
         self.thread_id = thread.id
-        self._thread_model = thread.model
-        self.sub_title = thread.title
+        self._thread_source = thread.source
+        label = SOURCE_LABELS.get(thread.source, thread.source)
+        self.sub_title = f"{thread.title} · {label}" + (
+            f" · {thread.project}" if thread.project else ""
+        )
         self._cursor = max(self._cursor, await svc.latest_message_id())
         msgs = await svc.messages(thread.id, limit=MAX_RENDERED_MESSAGES)
-        await self.chat.remove_children()
+        await self.view.remove_children()
         self._displayed = set()
         if len(msgs) == MAX_RENDERED_MESSAGES:
             await self._note(f"_Showing the last {MAX_RENDERED_MESSAGES} messages._")
-        await self.chat.mount_all(MessageView.from_message(m) for m in msgs)
+        await self.view.mount_all(MessageView.from_message(m, thread.source) for m in msgs)
         self._displayed.update(m.id for m in msgs)
         if not msgs:
-            self.chat.mount(Static(EMPTY_HINT, id="empty"))
-        self.chat.scroll_end(animate=False)
-        if thread.model in svc.models:
-            self._set_model(thread.model)
+            self.view.mount(Static("(no messages)", id="empty"))
+        self.view.scroll_end(animate=False)
         self._mark_current()
 
-    def _set_model(self, model: str) -> None:
-        self.model = model
-        select = self.query_one("#model", Select)
-        if select.value != model:
-            with select.prevent(Select.Changed):
-                select.value = model
-        self._update_status()
-
-    # ---------- sync with other clients (web UI, other terminals) ----------
+    # ---------- live updates (background imports, other devices, the web UI) ----------
 
     async def _poll(self) -> None:
         if self.service is None or self._polling:
@@ -263,17 +244,17 @@ class AnamnesisApp(App[None]):
                 await self._refresh_threads()
             await self._sync_messages()
         except Exception:
-            log.exception("sync failed")
+            log.exception("refresh failed")
         finally:
             self._polling = False
 
     async def _sync_messages(self) -> None:
-        if self.thread_id is None or self._streaming == self.thread_id:
+        if self.thread_id is None:
             return
         for msg in await self.svc.messages_after(self._cursor):
             self._cursor = max(self._cursor, msg.id)
             if msg.thread_id == self.thread_id and msg.id not in self._displayed:
-                await self._mount_message(msg)
+                await self._mount_message(msg, self._thread_source)
 
     # ---------- input ----------
 
@@ -283,87 +264,11 @@ class AnamnesisApp(App[None]):
         if not text or self.service is None:
             return
         event.input.value = ""
-        if is_command(text):
-            try:
-                await self._run_command(parse_command(text))
-            except CommandError as e:
-                await self._note(str(e), "error")
-            return
-        if self._streaming is not None:
-            self.notify("Still answering the previous message…", severity="warning")
-            event.input.value = text
-            return
-        missing = self.svc.missing_key(self.model)
-        if missing:
-            await self._note(
-                f"`{missing}` is not set. Add it to `.env` and restart, or switch model with "
-                "`/model` / Ctrl+T.",
-                "error",
-            )
-            event.input.value = text
-            return
-        self._send(text)
-
-    @work(exclusive=False, group="send")
-    async def _send(self, text: str) -> None:
-        svc = self.svc
-        if self.thread_id is None:
-            thread = await svc.new_thread(model=self.model)
-            self.thread_id = thread.id
-            self._thread_model = thread.model
-            self._displayed = set()
-            self._cursor = max(self._cursor, await svc.latest_message_id())
-            await self._refresh_threads()
-        thread_id, model = self.thread_id, self.model
-        self._streaming = thread_id
-        view: MessageView | None = None
-        streamed = ""
         try:
-            async for ev in svc.send(thread_id, text, model):
-                visible = self.thread_id == thread_id
-                if isinstance(ev, UserSaved):
-                    self._displayed.add(ev.message.id)
-                    if visible:
-                        await self._mount(MessageView.from_message(ev.message))
-                elif isinstance(ev, Delta):
-                    streamed += ev.text
-                    if not visible:
-                        continue
-                    if view is None or not view.is_attached:
-                        view = MessageView("assistant", f"{model} · streaming…")
-                        await self._mount(view)
-                        await view.write(streamed)
-                    else:
-                        await view.write(ev.text)
-                    self.chat.scroll_end(animate=False)
-                elif isinstance(ev, AssistantSaved):
-                    self._displayed.add(ev.message.id)
-                    self._thread_model = model
-                    if view is not None and view.is_attached:
-                        await view.finish()
-                        view.set_header(MessageView.from_message(ev.message)._header)
-                    elif self.thread_id == thread_id:
-                        await self._mount(MessageView.from_message(ev.message))
-        except Exception as e:
-            if isinstance(e, ProviderError):
-                log.warning("provider request failed: %s", e)
-                text = str(e)
-            else:
-                log.exception("send failed")
-                text = f"{type(e).__name__}: {e}"
-            if view is not None and view.is_attached:
-                await view.finish()
-            if self.thread_id == thread_id:
-                await self._note(text, "error")
-            else:
-                self.notify(f"Request failed: {e}", severity="error")
-        finally:
-            self._streaming = None
-        # Not in `finally`: on cancellation (e.g. Ctrl+Q mid-stream) the DOM is being torn
-        # down, so touching widgets would crash the shutdown. The partial reply is already saved.
-        if self.is_running:
-            await self._refresh_threads()
-            await self._sync_messages()
+            cmd = parse_command(text) if is_command(text) else Command("search", text)
+            await self._run_command(cmd)
+        except CommandError as e:
+            await self._note(str(e), "error")
 
     # ---------- commands ----------
 
@@ -373,19 +278,6 @@ class AnamnesisApp(App[None]):
             await self._note(help_text())
         elif cmd.name == "quit":
             self.exit()
-        elif cmd.name == "new":
-            await self.action_new_thread(cmd.arg or None)
-        elif cmd.name == "model":
-            if not cmd.arg:
-                await self._note(
-                    f"Current model: **{self.model}**. Available: "
-                    + ", ".join(f"`{m}`" for m in svc.models)
-                )
-                return
-            if cmd.arg not in svc.models:
-                raise CommandError(f"Unknown model {cmd.arg!r}. Available: {', '.join(svc.models)}")
-            await self._switch_model(cmd.arg)
-            await self._note(f"Switched to **{cmd.arg}**.")
         elif cmd.name == "history":
             source = cmd.arg.strip().lower() or None
             threads = await svc.list_threads(limit=30, source=source)
@@ -420,22 +312,21 @@ class AnamnesisApp(App[None]):
         elif cmd.name == "open":
             n = int(cmd.arg)
             if not 1 <= n <= len(self._listing):
-                raise CommandError("No such item — run /history or /search first.")
+                raise CommandError("No such item — search or run /history first.")
             await self._open_thread(self._listing[n - 1])
         elif cmd.name == "rename":
             if self.thread_id is None:
-                raise CommandError("No active thread.")
+                raise CommandError("No conversation open.")
             await svc.rename_thread(self.thread_id, cmd.arg)
             await self._refresh_threads()
         elif cmd.name == "delete":
             if self.thread_id is None:
-                raise CommandError("No active thread.")
-            if self._streaming == self.thread_id:
-                raise CommandError("Wait for the current response to finish.")
+                raise CommandError("No conversation open.")
             if time.monotonic() - self._delete_armed_at > DELETE_CONFIRM_SECONDS:
                 self._delete_armed_at = time.monotonic()
                 await self._note(
-                    "Run `/delete` again within 10s to permanently delete this thread."
+                    "Run `/delete` again within 10s to permanently delete this conversation "
+                    "from memory."
                 )
                 return
             self._delete_armed_at = 0.0
@@ -446,13 +337,7 @@ class AnamnesisApp(App[None]):
                 await self._open_thread(threads[0].id)
             else:
                 self._show_empty()
-            self.notify("Thread deleted.")
-
-    async def _switch_model(self, model: str) -> None:
-        self._set_model(model)
-        if self.thread_id is not None and self._thread_model != model:
-            await self.svc.set_thread_model(self.thread_id, model)
-            self._thread_model = model
+            self.notify("Conversation deleted.")
 
     # ---------- events & actions ----------
 
@@ -460,33 +345,6 @@ class AnamnesisApp(App[None]):
     async def _thread_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, ThreadItem) and event.item.thread_id != self.thread_id:
             await self._open_thread(event.item.thread_id)
-        self.query_one("#prompt", Input).focus()
-
-    @on(Select.Changed, "#model")
-    async def _model_changed(self, event: Select.Changed) -> None:
-        if isinstance(event.value, str) and event.value != self.model:
-            await self._switch_model(event.value)
-
-    async def action_new_thread(self, title: str | None = None) -> None:
-        if self.service is None:
-            return
-        thread = await self.svc.new_thread(model=self.model, title=title or "New chat")
-        self.thread_id = None
-        await self._refresh_threads()
-        await self._open_thread(thread.id)
-        self.query_one("#prompt", Input).focus()
-
-    async def action_toggle_model(self) -> None:
-        if self.service is None:
-            return
-        models = self.svc.models
-        nxt = (
-            models[(models.index(self.model) + 1) % len(models)]
-            if self.model in models
-            else models[0]
-        )
-        await self._switch_model(nxt)
-        self.notify(f"Model: {nxt}")
 
     def action_focus_threads(self) -> None:
         self.query_one("#threads", ListView).focus()

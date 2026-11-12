@@ -1,6 +1,6 @@
 """`anam` command line.
 
-anam                      open the terminal UI (memory browser + chat)
+anam                      open the terminal memory browser
 anam sync [--watch]       import new history from Claude Code, Codex, Gemini CLI, Cursor
 anam import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data export
 anam search QUERY         search all memory from the shell
@@ -31,10 +31,10 @@ def _log_to_file(settings: Settings, name: str = "anamnesis.log") -> None:
 
 
 async def _with_service(settings: Settings, fn):  # type: ignore[no-untyped-def]
-    from src.core.chat import ChatService
+    from src.core.memory import MemoryService
 
     print("Opening memory…", file=sys.stderr, flush=True)
-    service = await ChatService.create(settings)
+    service = await MemoryService.create(settings)
     try:
         return await fn(service)
     finally:

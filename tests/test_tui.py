@@ -1,13 +1,13 @@
-"""Headless TUI tests via Textual's pilot, against the real ChatService + fake LLM."""
+"""Headless TUI tests via Textual's pilot, against a real MemoryService."""
 
 import asyncio
 
-from textual.widgets import Input, ListView, Select
+from textual.widgets import Input, ListView
 
 from src.cli.app import AnamnesisApp
 from src.cli.widgets import MessageView, ThreadItem
-from src.core.chat import ChatService
-from tests.conftest import FakeLLM
+from src.core.memory import MemoryService
+from tests.conftest import conversation
 
 
 async def wait_until(pilot, cond, limit: float = 5.0) -> None:  # type: ignore[no-untyped-def]
@@ -22,95 +22,77 @@ def views(app: AnamnesisApp) -> list[MessageView]:
     return list(app.query(MessageView))
 
 
+def ready(app: AnamnesisApp) -> bool:
+    return not app.query_one("#prompt", Input).disabled
+
+
 async def submit(pilot, app: AnamnesisApp, text: str) -> None:  # type: ignore[no-untyped-def]
     prompt = app.query_one("#prompt", Input)
     prompt.value = text
     await pilot.press("enter")
 
 
-async def test_chat_flow_streams_and_persists(service: ChatService, fake_llm: FakeLLM) -> None:
-    app = AnamnesisApp(service.settings, service)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        await submit(pilot, app, "Hello there Anamnesis")
-        await wait_until(pilot, lambda: len(views(app)) == 2 and app._streaming is None)
-        assert views(app)[0].content == "Hello there Anamnesis"
-        assert views(app)[1].content == fake_llm.reply
-        await wait_until(pilot, lambda: views(app)[1].rendered == fake_llm.reply)
-        assert views(app)[0].rendered == "Hello there Anamnesis"
-        assert app.thread_id is not None
-        msgs = await service.messages(app.thread_id)
-        assert [m.role for m in msgs] == ["user", "assistant"]
-        await wait_until(
-            pilot,
-            lambda: (
-                [i.has_class("current") for i in app.query(ThreadItem)] == [True]
-                and app.sub_title == "Hello there Anamnesis"
-            ),
-        )
-
-
-async def test_long_stream_renders_progressively(service: ChatService, fake_llm: FakeLLM) -> None:
-    fake_llm.reply = (
-        "## Title\n\n" + " ".join(f"word{i}" for i in range(300)) + "\n\n```py\nx = 1\n```"
+async def test_opens_latest_conversation_read_only(service: MemoryService) -> None:
+    await service.import_conversation(conversation("old", "older session", start=1_000))
+    t, _ = await service.import_conversation(
+        conversation("new", "how do we deploy", "via CI", title="Deploys", project="/w/api")
     )
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        await submit(pilot, app, "write a lot")
-        await wait_until(pilot, lambda: app._streaming is None and len(views(app)) == 2)
-        await wait_until(pilot, lambda: views(app)[1].rendered == fake_llm.reply)
-        assert "streaming" not in str(views(app)[1].query_one(".message-header").render())
+        await wait_until(pilot, lambda: app.thread_id == t.id and len(views(app)) == 2)
+        assert [v.content for v in views(app)] == ["how do we deploy", "via CI"]
+        assert views(app)[0].header.startswith("You · ")
+        assert app.sub_title == "Deploys · Claude Code · /w/api"
+        assert [i.has_class("current") for i in app.query(ThreadItem)] == [True, False]
+        assert "2 conversations from 1 sources" in str(app.query_one("#status").render())
+        assert not app.query("#model")  # no model picker: this is not a chat client
 
 
-async def test_model_toggle_and_command(service: ChatService, fake_llm: FakeLLM) -> None:
+async def test_plain_text_searches_and_open(service: MemoryService) -> None:
+    a, _ = await service.import_conversation(
+        conversation("a", "kubernetes cluster sizing", title="Alpha", start=1_000)
+    )
+    await service.import_conversation(conversation("b", "pasta recipe", title="Beta"))
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        assert app.model == "claude"
-        await pilot.press("ctrl+t")
-        await wait_until(pilot, lambda: app.model == "gemini")
-        assert app.query_one("#model", Select).value == "gemini"
-        await submit(pilot, app, "/model claude")
-        await wait_until(pilot, lambda: app.model == "claude")
-        await submit(pilot, app, "/model gemini")
-        await wait_until(pilot, lambda: app.model == "gemini")
-        await submit(pilot, app, "hi")
-        await wait_until(pilot, lambda: app._streaming is None and len(views(app)) >= 4)
-        assert fake_llm.calls[-1]["model"] == service.settings.gemini_model
-        assert app.thread_id and (await service.get_thread(app.thread_id)).model == "gemini"
-
-
-async def test_history_search_open_rename_delete(service: ChatService) -> None:
-    a = await service.new_thread(title="Alpha thread")
-    await service.db.add_message(a.id, "user", "kubernetes cluster sizing")
-    b = await service.new_thread(title="Beta thread")
-    await service.db.add_message(b.id, "user", "pasta recipe")
-    app = AnamnesisApp(service.settings, service)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: app.thread_id == b.id)  # most recent opened
-        await submit(pilot, app, "/history")
-        await wait_until(pilot, lambda: "Alpha thread" in views(app)[-1].content)
-        await submit(pilot, app, "/search kubernetes")
-        await wait_until(pilot, lambda: "Alpha thread" in views(app)[-1].content)
+        await wait_until(pilot, lambda: ready(app) and app.thread_id is not None)
+        await submit(pilot, app, "kubernetes")
+        await wait_until(pilot, lambda: "**Search: kubernetes**" in views(app)[-1].content)
+        assert "Alpha" in views(app)[-1].content
+        assert len(await service.list_threads()) == 2  # searching never creates anything
         await submit(pilot, app, "/open 1")
         await wait_until(pilot, lambda: app.thread_id == a.id)
         assert views(app)[0].content == "kubernetes cluster sizing"
+
+
+async def test_history_rename_delete(service: MemoryService) -> None:
+    a, _ = await service.import_conversation(
+        conversation("a", "first", title="Alpha thread", start=1_000)
+    )
+    b, _ = await service.import_conversation(conversation("b", "second", title="Beta thread"))
+    app = AnamnesisApp(service.settings, service)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await wait_until(pilot, lambda: app.thread_id == b.id)  # most recent opened
+        await submit(pilot, app, "/history claude-code")
+        await wait_until(pilot, lambda: "Alpha thread" in views(app)[-1].content)
+        await submit(pilot, app, "/open 2")
+        await wait_until(pilot, lambda: app.thread_id == a.id)
         await submit(pilot, app, "/rename Renamed alpha")
-        await wait_until(pilot, lambda: app.sub_title == "Renamed alpha")
+        await wait_until(pilot, lambda: app.sub_title.startswith("Renamed alpha"))
         await submit(pilot, app, "/delete")
         await pilot.pause(0.1)
         assert len(await service.list_threads()) == 2  # needs confirmation
         await submit(pilot, app, "/delete")
         await wait_until(pilot, lambda: app.thread_id == b.id)
         assert [t.id for t in await service.list_threads()] == [b.id]
-        await submit(pilot, app, "/bogus")
-        await wait_until(pilot, lambda: "Unknown command" in views(app)[-1].content)
+        for gone in ("/new", "/model gemini", "/bogus"):
+            await submit(pilot, app, gone)
+            await wait_until(pilot, lambda: "Unknown command" in views(app)[-1].content)
 
 
-async def test_sidebar_selection_and_new_thread(service: ChatService) -> None:
-    a = await service.new_thread(title="First")
-    await service.new_thread(title="Second")
+async def test_sidebar_selection(service: MemoryService) -> None:
+    a, _ = await service.import_conversation(conversation("a", "one", title="First", start=1_000))
+    await service.import_conversation(conversation("b", "two", title="Second"))
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: app.thread_id is not None)
@@ -119,63 +101,39 @@ async def test_sidebar_selection_and_new_thread(service: ChatService) -> None:
         lv.index = 1
         await pilot.press("enter")
         await wait_until(pilot, lambda: app.thread_id == a.id)
-        await pilot.press("ctrl+n")
-        await wait_until(pilot, lambda: len(list(app.query(ThreadItem))) == 3)
-        assert app.thread_id not in {a.id}
 
 
-async def test_live_sync_from_other_client(service: ChatService) -> None:
-    t = await service.new_thread(title="Shared")
+async def test_live_updates_from_background_imports(service: MemoryService) -> None:
+    t, _ = await service.import_conversation(conversation("s", "start", title="Shared"))
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
         await wait_until(pilot, lambda: app.thread_id == t.id)
-        # Simulate the web UI writing to the same database.
-        await service.db.add_message(t.id, "user", "sent from the browser")
+        # A background sync appends to the open session and adds a new one.
+        await service.import_conversation(conversation("s", "start", "continued in Claude Code"))
         await wait_until(
-            pilot, lambda: any(v.content == "sent from the browser" for v in views(app))
+            pilot, lambda: any(v.content == "continued in Claude Code" for v in views(app))
         )
-        other = await service.db.create_thread("Created elsewhere")
+        other, _ = await service.import_conversation(conversation("o", "elsewhere"))
         await wait_until(pilot, lambda: len(list(app.query(ThreadItem))) == 2)
         await service.db.delete_thread(t.id)
         await wait_until(pilot, lambda: app.thread_id is None)
         assert other.id in {i.thread_id for i in app.query(ThreadItem)}
 
 
-async def test_missing_key_blocks_send(service: ChatService, fake_llm: FakeLLM) -> None:
-    from src.config import Settings
-    from src.providers.router import ProviderRouter
-
-    s = service.settings.model_copy(update={"anthropic_api_key": None})
-    svc = ChatService(service.db, ProviderRouter(s, completion_fn=fake_llm), None, s)
-    app = AnamnesisApp(s, svc)
-    async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        await submit(pilot, app, "hello")
-        await wait_until(pilot, lambda: any("ANTHROPIC_API_KEY" in v.content for v in views(app)))
-        assert fake_llm.calls == []
-        assert app.query_one("#prompt", Input).value == "hello"  # input preserved
-    assert isinstance(s, Settings)
-
-
-async def test_provider_error_is_shown(service: ChatService, fake_llm: FakeLLM) -> None:
-    fake_llm.fail = RuntimeError("rate limited")
+async def test_empty_memory_hint(service: MemoryService) -> None:
     app = AnamnesisApp(service.settings, service)
     async with app.run_test(size=(120, 40)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
-        await submit(pilot, app, "hello")
-        await wait_until(pilot, lambda: any("rate limited" in v.content for v in views(app)))
-        assert app._streaming is None
+        await wait_until(pilot, lambda: ready(app))
+        assert "Nothing in memory yet" in str(app.query_one("#empty").render())
 
 
-async def test_app_creates_and_closes_its_own_service(settings, fake_llm) -> None:  # type: ignore[no-untyped-def]
-    """Production path: AnamnesisApp builds ChatService from settings (RAG off -> no model DL)."""
-    s = settings.model_copy(update={"rag_enabled": False})
+async def test_app_creates_and_closes_its_own_service(settings) -> None:  # type: ignore[no-untyped-def]
+    """Production path: AnamnesisApp opens the memory itself (semantic off -> no model DL)."""
+    s = settings.model_copy(update={"semantic_search": False})
     app = AnamnesisApp(s)
     async with app.run_test(size=(100, 30)) as pilot:
-        await wait_until(pilot, lambda: not app.query_one("#prompt", Input).disabled)
+        await wait_until(pilot, lambda: ready(app))
         assert app.service is not None and app.service.index is None
-        assert "keyword memory only" in str(app.query_one("#status").render())
-        await pilot.press("ctrl+n")
-        await wait_until(pilot, lambda: len(list(app.query(ThreadItem))) == 1)
+        assert "keyword search only" in str(app.query_one("#status").render())
     assert app.service.db._conn is None  # closed on exit
     assert s.db_path.exists()

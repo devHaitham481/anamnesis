@@ -16,7 +16,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from src.config import Settings, load_settings
-from src.core.chat import ChatService
+from src.core.memory import MemoryService
 from src.core.models import SOURCE_LABELS, SearchHit, Thread
 
 log = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ SNIPPET_CHARS = 700
 _state: dict[str, Any] = {}
 
 
-def _service() -> ChatService:
+def _service() -> MemoryService:
     service = _state.get("service")
     if service is None:
         raise RuntimeError("Anamnesis memory is still starting up; try again in a moment.")
@@ -85,7 +85,7 @@ def format_threads(threads: list[Thread]) -> str:
 
 def build_server(
     settings: Settings | None = None,
-    service: ChatService | None = None,
+    service: MemoryService | None = None,
     sync: bool | None = None,
 ) -> MCPServer[Any]:
     """Create the MCP server. Inject `service` in tests; otherwise it is opened at startup."""
@@ -93,7 +93,7 @@ def build_server(
     @contextlib.asynccontextmanager
     async def lifespan(_: MCPServer[Any]) -> AsyncIterator[None]:
         own = service is None
-        svc = service or await ChatService.create(settings or load_settings())
+        svc = service or await MemoryService.create(settings or load_settings())
         _state["service"] = svc
         stop = asyncio.Event()
         task = None

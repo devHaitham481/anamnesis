@@ -1,4 +1,4 @@
-"""Persistent domain models shared by the core, TUI and web layers."""
+"""Persistent domain models shared by the core, MCP server, CLI, TUI and web layers."""
 
 from __future__ import annotations
 
@@ -9,9 +9,10 @@ from pydantic import BaseModel
 Role = Literal["system", "user", "assistant"]
 
 
-# Where a conversation came from. "anamnesis" = chatted inside Anamnesis; the rest are imported.
+# Where a conversation came from. "anamnesis" = a chat from the old built-in chat (still kept and
+# searchable in existing databases); "note" = saved via `remember`; the rest are imported.
 SOURCE_LABELS: dict[str, str] = {
-    "anamnesis": "Anamnesis chat",
+    "anamnesis": "Anamnesis chat (legacy)",
     "note": "Memory note",
     "claude-code": "Claude Code",
     "codex": "Codex CLI",
@@ -26,8 +27,6 @@ SOURCE_LABELS: dict[str, str] = {
 class Thread(BaseModel):
     id: str
     title: str
-    model: str
-    system_prompt: str | None = None
     created_at: float
     updated_at: float
     source: str = "anamnesis"

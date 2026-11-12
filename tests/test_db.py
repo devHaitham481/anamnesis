@@ -13,10 +13,10 @@ async def db(tmp_path: Path):  # type: ignore[no-untyped-def]
 
 
 async def test_thread_crud(db: Database) -> None:
-    t = await db.create_thread("Hello", model="gemini")
+    t = await db.create_thread("Hello")
     assert (await db.get_thread(t.id)).title == "Hello"
     renamed = await db.update_thread(t.id, title="Renamed")
-    assert renamed.title == "Renamed" and renamed.model == "gemini"
+    assert renamed.title == "Renamed" and renamed.source == "anamnesis"
     assert [x.id for x in await db.list_threads()] == [t.id]
     await db.delete_thread(t.id)
     with pytest.raises(ThreadNotFoundError):
@@ -26,7 +26,7 @@ async def test_thread_crud(db: Database) -> None:
 
 
 async def test_messages_order_limit_and_cascade(db: Database) -> None:
-    t = await db.create_thread()
+    t = await db.create_thread("x")
     for i in range(5):
         await db.add_message(t.id, "user" if i % 2 == 0 else "assistant", f"m{i}")
     assert [m.content for m in await db.get_messages(t.id)] == ["m0", "m1", "m2", "m3", "m4"]
@@ -63,10 +63,7 @@ async def test_keyword_search_is_injection_safe(db: Database) -> None:
         await db.search_messages(weird)  # must not raise
 
 
-async def test_providers_and_signature(db: Database) -> None:
-    await db.upsert_provider("claude", "anthropic/x")
-    await db.upsert_provider("claude", "anthropic/y")
-    assert await db.list_providers() == {"claude": "anthropic/y"}
+async def test_threads_signature_changes(db: Database) -> None:
     s1 = await db.threads_signature()
     t = await db.create_thread("x")
     s2 = await db.threads_signature()
@@ -83,7 +80,7 @@ async def test_persistence_across_connections(tmp_path: Path) -> None:
 
 
 async def test_lookup_latency_under_50ms(db: Database) -> None:
-    t = await db.create_thread()
+    t = await db.create_thread("x")
     for i in range(500):
         await db.conn.execute(
             "INSERT INTO messages(thread_id, role, content, created_at) VALUES (?, 'user', ?, 0)",

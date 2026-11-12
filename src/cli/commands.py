@@ -6,14 +6,12 @@ from dataclasses import dataclass
 
 COMMANDS: dict[str, str] = {
     "help": "Show this help",
-    "new": "/new [title] — start a new thread",
-    "model": "/model [name] — show or switch the model (claude, gemini)",
+    "search": "/search <query> — search all memory (or just type the query); open with /open N",
     "history": "/history [source] — recent conversations, optionally from one tool "
-    "(claude-code, codex, gemini-cli, cursor, chatgpt, claude-web, gemini-web, anamnesis)",
-    "search": "/search <query> — search all past messages (open a result with /open N)",
+    "(claude-code, codex, gemini-cli, cursor, chatgpt, claude-web, gemini-web, note)",
     "open": "/open N — open item N from the last /history or /search listing",
-    "rename": "/rename <title> — rename the current thread",
-    "delete": "/delete — delete the current thread (run twice to confirm)",
+    "rename": "/rename <title> — rename the open conversation",
+    "delete": "/delete — delete the open conversation from memory (run twice to confirm)",
     "sync": "/sync — import new history from your other AI tools now",
     "quit": "Exit Anamnesis",
 }
@@ -51,5 +49,5 @@ def parse_command(text: str) -> Command:
 
 def help_text() -> str:
     rows = "\n".join(f"- `/{n}` — {d.split(' — ')[-1]}" for n, d in COMMANDS.items())
-    keys = "**Keys:** `Ctrl+N` new thread · `Ctrl+T` toggle model · `Ctrl+Q` quit"
+    keys = "**Keys:** `Ctrl+L` conversation list · `Ctrl+F` / `Esc` search box · `Ctrl+Q` quit"
     return f"**Commands**\n\n{rows}\n\n{keys}"

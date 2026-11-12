@@ -5,8 +5,10 @@
 - **Collects automatically:** local session logs from Claude Code, Codex, Gemini CLI and Cursor are imported in the background, incrementally.
 - **Imports web chats:** ChatGPT, claude.ai (this also covers Claude Desktop chats, which are stored server-side) and Gemini (Google Takeout) data exports.
 - **Gives it back to your agents** through an MCP server: `search_memory`, `recent_conversations`, `get_conversation`, `remember`.
-- **Private by default:** SQLite plus a LanceDB vector index with a local embedding model. Nothing is uploaded, and no API key is needed for the memory itself.
-- **Browse it:** a terminal UI and a web UI to search and read everything, filtered by tool. You can also chat with Claude or Gemini from them; those chats get the same memory as context.
+- **Private by default:** SQLite plus a LanceDB vector index with a local embedding model. Nothing is uploaded, and no API keys are needed.
+- **Browse it:** a terminal UI and a web UI to search and read everything, filtered by tool.
+
+Anamnesis does one thing: it is the memory. It is not a chat client and never calls a model; you keep talking to the tools you already use.
 
 ## Quick start
 
@@ -54,7 +56,7 @@ Only what you and the assistant *said* is kept: tool calls, tool output, reasoni
 ### Commands
 
 ```
-anam                      terminal UI (memory browser + chat)
+anam                      terminal memory browser
 anam sync [--watch]       import new local history now (or keep watching)
 anam import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
 anam search QUERY         search everything from the shell  [--source chatgpt]
@@ -70,14 +72,14 @@ anam mcp                  the MCP server (connected tools start it for you)
 
 ## Terminal UI
 
-The sidebar shows every conversation with a source badge (`CC` Claude Code, `CX` Codex, `GC` Gemini CLI, `CU` Cursor, `GPT` ChatGPT, `CL` claude.ai, `GW` Gemini web, `NX` Anamnesis, `NB` notes).
+The sidebar shows every conversation with a source badge (`CC` Claude Code, `CX` Codex, `GC` Gemini CLI, `CU` Cursor, `GPT` ChatGPT, `CL` claude.ai, `GW` Gemini web, `NB` notes saved with `remember`, `AN` chats from the old built-in chat). Typing in the bottom box searches all memory.
 
 | Key / command | Action |
 |---|---|
-| `/search <query>`, `/open N` | Search all memory, open a result |
+| *text* or `/search <query>`, `/open N` | Search all memory, open a result |
 | `/history [source]` | Recent conversations, e.g. `/history chatgpt` |
 | `/sync` | Import new history now |
-| `Ctrl+N` / `/new`, `Ctrl+T` / `/model` | New Anamnesis chat, switch Claude ↔ Gemini |
+| `Ctrl+L` / `Ctrl+F` | Focus the conversation list / the search box |
 | `/rename`, `/delete` (twice), `/help`, `Ctrl+Q` | Manage, help, quit |
 
 ## Web UI & API
@@ -89,19 +91,19 @@ The sidebar shows every conversation with a source badge (`CC` Claude Code, `CX`
 | `GET /api/sources` | Tools with conversation counts |
 | `GET /api/threads?source=`, `GET /api/threads/{id}/messages` | Browse |
 | `GET /api/search?q=&source=` | Semantic + keyword search |
-| `POST /api/threads/{id}/chat` (SSE), `WS /ws` | Chat with Claude/Gemini (needs API keys) |
+| `PATCH`/`DELETE /api/threads/{id}` | Rename / delete a conversation |
+| `WS /ws` | Live updates as new history is imported |
 
 To reach it from other devices, set `ANAMNESIS_HOST=0.0.0.0`, `ANAMNESIS_ALLOWED_HOSTS` and `ANAMNESIS_AUTH_TOKEN`, then open `http://<host>:8000/?token=<token>` once.
 
 ## Configuration
 
-Everything comes from `.env` or the environment (see `.env.example`). API keys (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) are only needed for chatting inside Anamnesis. Data lives in `~/.anamnesis` (`ANAMNESIS_DATA_DIR`). Logs are in `anamnesis.log` and `mcp.log` there.
+Everything comes from `.env` or the environment (see `.env.example`); nothing is required. Data lives in `~/.anamnesis` (`ANAMNESIS_DATA_DIR`). Logs are in `anamnesis.log` and `mcp.log` there.
 
 ## Development
 
 ```bash
 .venv/bin/pytest -q                  # everything offline: importers, MCP over stdio, TUI, web, browser e2e
-.venv/bin/pytest -m integration      # live Claude/Gemini calls (needs keys + credit)
 .venv/bin/ruff check . && .venv/bin/mypy src
 ```
 
@@ -109,6 +111,5 @@ Layout:
 - `src/ingest`: one parser per tool, plus the incremental scanner
 - `src/memory_mcp`: the MCP server
 - `src/connect.py`: tool registration
-- `src/core`: storage, search, chat service
-- `src/providers`: LiteLLM router
+- `src/core`: storage, search, the memory service, cross-device sync
 - `src/cli`, `src/web`: the interfaces

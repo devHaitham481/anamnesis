@@ -99,3 +99,15 @@ An independent review agent audited the codebase; all findings fixed with regres
 - NexusAI is now **Anamnesis** (Plato: learning is recollection). CLI `anam` (`anam-web`, `anam-mcp`), package `anamnesis`, MCP server `anamnesis`, data in `~/.anamnesis`.
 - Backward compatible: `~/.nexus-ai` (and `nexus.db`) is moved on first run; `NEXUS_*` env vars still work as fallbacks; native chats stored with source `nexus` are relabelled `anamnesis`.
 - `site/index.html` rebuilt after a REA capture of exe.dev: left rail, paper sheets, serif + typewriter type, live terminal demos with replay/tabs, Greek-key bands and a terracotta/black-figure palette.
+
+## 2026-11-12 — Single purpose: chat gateway removed
+**Direction (user):** "we dont want the chat gateway at all. we need this tool to be a single purpose driven." Anamnesis is only the shared memory; it never calls a model.
+
+- **Removed:** `src/providers` (LiteLLM router), `src/core/chat.py` (chat turns, streaming, prompt assembly), `src/core/context.py`, the `litellm` dependency, provider API keys and model settings, the providers table usage.
+- **`MemoryService`** (`src/core/memory.py`) replaces `ChatService` as the one entry point: import, remember, search, browse, rename/delete, change feed.
+- **TUI:** a memory browser. Typing searches all memory; `/history`, `/open`, `/rename`, `/delete`, `/sync`. No composer, model picker, `/new` or `/model`.
+- **Web:** browse, search, source filter, rename/delete, live updates over `/ws`. Removed `/api/models`, `POST /api/threads`, the SSE chat endpoint and WebSocket `send`.
+- **Config:** `ANAMNESIS_RAG*` became `ANAMNESIS_SEMANTIC_SEARCH` / `ANAMNESIS_SEMANTIC_MIN_SCORE` (old names still read). Old `.env` files with API keys still load; the keys are ignored.
+- **Existing data:** chats made with the old built-in chat stay in memory (source `anamnesis`, shown as "Anamnesis chat (legacy)") and still sync across devices. The unused `threads.model` / `system_prompt` columns and `providers` table stay in old databases.
+- **Verified:** 83 tests pass (3 runs), including the Playwright browser e2e and MCP over stdio. Ruff and mypy clean. `anam status` and `anam search` work against the real `~/.anamnesis` database.
+

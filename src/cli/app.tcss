@@ -37,26 +37,13 @@ Screen {
     width: 1fr;
 }
 
-#toolbar {
-    height: auto;
-    padding: 0 1;
-}
-
-#model {
-    width: 22;
-}
-
 #status {
     width: 1fr;
-    padding: 1 2;
+    padding: 0 2;
     color: $text-muted;
 }
 
-#status.warning {
-    color: $warning;
-}
-
-#chat {
+#view {
     height: 1fr;
     padding: 0 1;
 }

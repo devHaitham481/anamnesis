@@ -1,13 +1,14 @@
-"""Presentational widgets for the TUI. No database or provider access here."""
+"""Presentational widgets for the TUI. No database access here."""
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Label, ListItem, Markdown
-from textual.widgets.markdown import MarkdownStream
 
-from src.core.models import Message, Thread
+from src.core.models import SOURCE_LABELS, Message, Thread
 
 # Short sidebar badges showing which tool a conversation came from.
 SOURCE_TAGS = {
@@ -31,48 +32,36 @@ class ThreadItem(ListItem):
         self.source = thread.source
 
 
+def message_header(msg: Message, source: str | None = None) -> str:
+    when = f"{datetime.fromtimestamp(msg.created_at):%Y-%m-%d %H:%M}"
+    if msg.role == "user":
+        who = "Note" if source == "note" else "You"
+    else:
+        who = (msg.model or "").split("/")[-1] or SOURCE_LABELS.get(source or "", "Assistant")
+    return f"{who} · {when}"
+
+
 class MessageView(Vertical):
-    """One chat bubble: a header line plus a Markdown body."""
+    """One stored message: a header line plus a Markdown body."""
 
     def __init__(self, role: str, header: str, content: str = "") -> None:
         super().__init__(classes=f"message {role}")
         self._header = header
         self._content = content
         self.body = Markdown(content)
-        self._stream: MarkdownStream | None = None
 
     def compose(self) -> ComposeResult:
         yield Label(self._header, classes="message-header", markup=False)
         yield self.body
 
     @classmethod
-    def from_message(cls, msg: Message) -> MessageView:
-        if msg.role == "user":
-            header = "You"
-        else:
-            model = (msg.model or "assistant").split("/")[-1]
-            header = f"{model} · {msg.provider}" if msg.provider else model
-        return cls(msg.role, header, msg.content)
+    def from_message(cls, msg: Message, source: str | None = None) -> MessageView:
+        return cls(msg.role, message_header(msg, source), msg.content)
 
-    def set_header(self, header: str) -> None:
-        self.query_one(".message-header", Label).update(header)
-
-    async def write(self, text: str) -> None:
-        if self._stream is None:
-            self._stream = Markdown.get_stream(self.body)
-        self._content += text
-        await self._stream.write(text)
-
-    async def finish(self) -> None:
-        if self._stream is not None:
-            await self._stream.stop()
-            self._stream = None
+    @property
+    def header(self) -> str:
+        return self._header
 
     @property
     def content(self) -> str:
         return self._content
-
-    @property
-    def rendered(self) -> str:
-        """Markdown source currently shown on screen."""
-        return self.body.source
