@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv -p ${{ matrix.python }} .venv && uv pip install -p .venv -e ".[dev]"
+      - run: .venv/bin/ruff check .
+      - run: .venv/bin/mypy src
+      - run: .venv/bin/pytest -q

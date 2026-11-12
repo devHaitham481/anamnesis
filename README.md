@@ -1,6 +1,28 @@
-# Anamnesis
+<h1 align="center"><img src="docs/logo.svg" alt="Anamnesis" width="380"></h1>
 
-[Website](https://devhaitham481.github.io/anamnesis/) · MIT license
+<p align="center"><b>One memory for all your AI tools.</b><br>What you worked out in ChatGPT, Claude Code already knows.</p>
+
+<p align="center">
+  <a href="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-server-c8653a">
+  <a href="https://devhaitham481.github.io/anamnesis/"><img alt="Website" src="https://img.shields.io/badge/website-anamnesis-1c1a17"></a>
+</p>
+
+<p align="center">
+  <img alt="Works with Claude Code" src="https://img.shields.io/badge/Claude_Code-d97757?logo=claude&logoColor=white">
+  <img alt="Works with Codex" src="https://img.shields.io/badge/Codex-000000?logo=openai&logoColor=white">
+  <img alt="Works with Cursor" src="https://img.shields.io/badge/Cursor-000000?logo=cursor&logoColor=white">
+  <img alt="Works with Gemini CLI" src="https://img.shields.io/badge/Gemini_CLI-8e75b2?logo=googlegemini&logoColor=white">
+  <img alt="Works with ChatGPT" src="https://img.shields.io/badge/ChatGPT-10a37f?logo=openai&logoColor=white">
+  <img alt="Works with claude.ai" src="https://img.shields.io/badge/claude.ai-d97757?logo=claude&logoColor=white">
+</p>
+
+<p align="center"><img src="docs/screenshot.svg" alt="The Anamnesis terminal UI: Claude Code recalling a decision made in ChatGPT" width="900"></p>
+
+<p align="center"><sub>Sample data. Regenerate with <code>python scripts/screenshot.py</code>.</sub></p>
+
 
 **One local memory shared by all your AI tools.** Anamnesis collects your conversations from Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini into one searchable store on your machine. Every MCP-capable agent can then recall them: ask Claude Code "what did we decide about auth last week?" and it can find the answer, even if that discussion happened in Cursor or ChatGPT.
 

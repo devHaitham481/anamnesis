@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="112" viewBox="0 0 440 112" role="img" aria-label="anamnesis">
+  <!-- mark: many conversations (lines) flowing into one memory (ring) -->
+  <rect x="4" y="4" width="104" height="104" rx="22" fill="#1c1a17" stroke="#3a3631" stroke-width="2"/>
+  <rect x="24" y="32" width="22" height="7" rx="3.5" fill="#6b665e"/>
+  <rect x="24" y="52.5" width="28" height="7" rx="3.5" fill="#9a948a"/>
+  <rect x="24" y="73" width="16" height="7" rx="3.5" fill="#6b665e"/>
+  <circle cx="79" cy="56" r="14" fill="none" stroke="#e07a4f" stroke-width="7"/>
+  <circle cx="79" cy="56" r="4" fill="#e07a4f"/>
+  <!-- wordmark -->
+  <text x="132" y="74" font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+        font-size="50" font-weight="600" letter-spacing="-1"><tspan fill="#c8653a">anam</tspan><tspan fill="#8a8378">nesis</tspan></text>
+</svg>
