@@ -115,6 +115,12 @@ class MemoryService:
             except Exception as e:
                 log.warning("Failed to remove thread %s from vector index: %s", thread_id, e)
 
+    async def wipe(self) -> None:
+        """Forget everything (a node being reset). Irreversible."""
+        await self.db.wipe()
+        if self.index is not None:
+            await asyncio.to_thread(self.index.clear)
+
     async def messages(self, thread_id: str, limit: int | None = None) -> list[Message]:
         return await self.db.get_messages(thread_id, limit=limit)
 

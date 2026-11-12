@@ -22,22 +22,62 @@ uv venv -p 3.13 .venv && uv pip install -p .venv -e ".[dev]"
 
 After `connect`, restart the tool (or open a new session). Agents will use `search_memory` when you refer to earlier work, and `remember` to save decisions. While any connected tool is running, new conversations keep syncing in the background.
 
-### All your computers, one memory
+### Your memory in claude.ai, ChatGPT and on your phone: your own node
+
+Web and mobile chats can't reach a program on your laptop, and your laptop isn't always on. So you run a small **node**: your own always-on copy of the memory, on a server you control. There is no Anamnesis cloud. The node:
+
+- lets claude.ai and ChatGPT (web, desktop and mobile apps) search your memory and save notes, as a custom connector;
+- keeps working while every computer is asleep;
+- is the sync hub for all your computers: a new computer gets the whole memory with one command.
+
+**1. Deploy it** (one time, ~5 minutes). Pick one:
+
+```bash
+anam node deploy fly            # Fly.io: creates the app, a 1 GB volume and your password, then links this computer
+```
+
+or, on any server with Docker (VPS, NAS, home server), put `ANAMNESIS_DOMAIN` and `ANAMNESIS_NODE_PASSWORD` in a `.env` next to [`docker-compose.yml`](docker-compose.yml) and run `docker compose up -d`. Caddy gets the HTTPS certificate for you.
+
+**2. Link your computers.** On each one:
+
+```bash
+anam node link https://your-node.example.com
+```
+
+You enter the node password and choose what this computer uploads: everything (recommended), everything except some project folders, or only notes saved with `remember`. Change it later with `anam node scope`.
+
+**3. Connect web chats:**
+
+```bash
+anam connect claude-web          # prints the 4 steps for claude.ai
+anam connect chatgpt-web         # and for ChatGPT
+```
+
+You paste `https://your-node…/mcp` as a custom connector. The sign-in page that opens is your node's own: enter the node password, and choose whether the app may also save notes. Custom connectors need a paid claude.ai or ChatGPT plan. Gemini doesn't support them.
+
+**Keep an eye on it:**
+
+| | |
+|---|---|
+| `anam node status` | memory, computers and connected apps |
+| `anam node activity` | every search and save a web app made, e.g. `claude searched "auth flow"` |
+| `anam node revoke claude` | cut off one app (`--all` for every app) |
+| `anam node wipe` | erase everything on the node; computers keep their copies and link again |
+
+**Security:** computers and the node talk over HTTPS, and synced data is also end-to-end encrypted with a key that only linked computers and the node hold. The node has to read your memory to search it, which is why it runs on your server. Web apps get revocable OAuth tokens, never the password. Wrong passwords are rate-limited. Use a long, unique node password.
+
+**Cost:** about one small machine. On Fly.io the default is 1 shared CPU and 1 GB, and it stops when idle and wakes on the next request, so you mostly pay for the time it runs plus the 1 GB volume (see Fly's pricing page). The first upload of a large history keeps it busy for some minutes while it indexes for semantic search; keyword search works immediately.
+
+### Without a node: sync through a folder
+
+If you only need your computers to share memory (no web chats), a folder you already sync works too:
 
 ```bash
 anam share                 # on your first computer: prints a pairing code
-anam join XXXX-XXXX-…      # on each other computer (after installing Anamnesis there)
-anam connect all           # then give that computer's AI tools access
+anam join XXXX-XXXX-…      # on each other computer
 ```
 
-Memory syncs through a folder you already sync. The default is `iCloud Drive/Anamnesis`; for Dropbox, Syncthing or anything else, pass a folder path to `share` and `join`.
-- **Private:** everything in the folder is end-to-end encrypted (AES-256-GCM). The key lives only in the pairing code, so the cloud provider sees nothing readable.
-- **No conflicts:** each computer writes only its own subfolder of small, immutable files, and reads everyone else's. Nothing can conflict or overwrite.
-- **Merging:** the same conversation or note topic continued on two computers merges into one thread.
-- **Always current:** a new computer gets the whole history on `join`. Running agents everywhere pick up other computers' memories within about a minute.
-- **Any AI account:** memory belongs to you, not to an AI account, so it doesn't matter which one you're logged into.
-
-`anam devices` lists the computers; `anam unshare` stops syncing this one.
+The default folder is `iCloud Drive/Anamnesis`; pass a path for Dropbox, Syncthing or anything else. Everything in the folder is end-to-end encrypted (AES-256-GCM) and the key lives only in the pairing code. Each computer writes only its own files, so nothing conflicts, and a conversation continued on two computers merges into one thread. `anam devices` lists the computers; `anam unshare` stops syncing this one.
 
 ### What gets imported
 
@@ -65,6 +105,10 @@ anam disconnect TOOL
 anam share [FOLDER]       sync memory across computers (prints a pairing code)
 anam join CODE [FOLDER]   add this computer;  anam devices / anam unshare
 anam status               what is stored per tool, sync state, connected tools
+anam node deploy fly      create your node on Fly.io (or use docker-compose.yml)
+anam node link URL        sync this computer through your node
+anam node status|activity|revoke|scope|wipe
+anam connect claude-web   use your memory in claude.ai (also chatgpt-web)
 anam mcp                  the MCP server (connected tools start it for you)
 ```
 
@@ -111,5 +155,6 @@ Layout:
 - `src/ingest`: one parser per tool, plus the incremental scanner
 - `src/memory_mcp`: the MCP server
 - `src/connect.py`: tool registration
-- `src/core`: storage, search, the memory service, cross-device sync
+- `src/core`: storage, search, the memory service, cross-device sync (folder or node)
+- `src/node`: the self-hosted node (sync hub, OAuth, remote MCP); `Dockerfile`, `docker-compose.yml`, `fly.toml`
 - `src/cli`, `src/web`: the interfaces

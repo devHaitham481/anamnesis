@@ -56,11 +56,22 @@ Anamnesis is a local-first, single-purpose memory layer. It collects the convers
 - [x] Encrypted cross-device memory (`anam share` / `join` / `devices`).
 - [x] Single purpose: chat gateway removed.
 
-### Next
+### Done: the always-on node (self-hosted)
+
+Anamnesis is open source and self-hosted; there is no hosted service. Each user can run a small **node** on their own infrastructure (Docker on a VPS/NAS, or Fly.io with one command). The node:
+
+- is the sync hub for all of a user's computers (replaces the shared-folder setup; folders stay supported);
+- keeps a searchable copy, so web and mobile chats work while every computer is asleep;
+- serves a remote MCP endpoint for claude.ai / ChatGPT custom connectors, with its own OAuth sign-in (the node password), read-only or read + save notes;
+- logs every connector search/save, and connectors can be revoked one by one.
+
+User flow: deploy node → `anam node link <url>` (password; choose all / exclude projects / notes only) → `anam connect claude-web` (paste URL, sign in) → done.
+
+### Later
 
 - [ ] Browser extension for live capture from ChatGPT / claude.ai / Gemini web.
 - [ ] Propagate deletions across devices.
-- [ ] Optional hosted relay for cross-device sync.
+- [ ] Passkey sign-in on the node.
 
 ---
 

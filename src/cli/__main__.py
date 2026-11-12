@@ -8,6 +8,7 @@ anam connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = sh
 anam disconnect TOOL
 anam status               what is stored, per source
 anam mcp                  run the MCP server (started for you by connected tools)
+anam node …               your self-hosted node: deploy, link, status, activity, revoke, wipe
 """
 
 from __future__ import annotations
@@ -150,9 +151,12 @@ def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
     return cmd_connect(settings, argparse.Namespace(tool=None))
 
 
-def cmd_connect(_: Settings, args: argparse.Namespace) -> int:
+def cmd_connect(settings: Settings, args: argparse.Namespace) -> int:
+    from src.cli.node_cmd import WEB_CONNECTORS, connect_web
     from src.connect import targets
 
+    if args.tool in WEB_CONNECTORS:
+        return connect_web(settings, args.tool)
     all_targets = targets()
     if not args.tool:
         print("AI tools (MCP access to memory):")
@@ -166,6 +170,7 @@ def cmd_connect(_: Settings, args: argparse.Namespace) -> int:
             )
             print(f"  {t.name:<15} {t.label:<15} {state}")
         print("\nConnect with: anam connect <tool>   or   anam connect all")
+        print("Web apps (through your node): anam connect claude-web | chatgpt-web")
         return 0
     if args.tool == "all":
         chosen = [t for t in all_targets.values() if t.installed()]
@@ -173,7 +178,8 @@ def cmd_connect(_: Settings, args: argparse.Namespace) -> int:
         chosen = [all_targets[args.tool]]
     else:
         print(
-            f"Unknown tool {args.tool!r}. Choose from: {', '.join(all_targets)}, all",
+            f"Unknown tool {args.tool!r}. Choose from: {', '.join(all_targets)}, all, "
+            + ", ".join(WEB_CONNECTORS),
             file=sys.stderr,
         )
         return 2
@@ -244,11 +250,19 @@ def cmd_devices(settings: Settings, _: argparse.Namespace) -> int:
 
     cfg = load_config(settings.data_dir)
     if cfg is None:
-        print("Memory sync is off. Turn it on with `anam share` (or `anam join CODE`).")
+        print(
+            "Memory sync is off. Link a node with `anam node link <url>`, or sync through a "
+            "folder with `anam share`."
+        )
         return 0
     me = this_device(settings.data_dir)
-    print(f"Synced via {cfg.folder}")
-    for d in list_devices(cfg):
+    print(f"Synced via {'your node ' if cfg.node else ''}{cfg.where}")
+    try:
+        found = list_devices(cfg)
+    except OSError as e:
+        print(f"  (can't reach it right now: {e})")
+        return 0
+    for d in found:
         when = (
             dt.datetime.fromtimestamp(d["last_write"]).strftime("%Y-%m-%d %H:%M")
             if d["last_write"]
@@ -314,6 +328,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="what is stored, and which tools are connected")
     sub.add_parser("mcp", help="run the MCP server on stdio")
     sub.add_parser("tui", help="open the terminal UI (default)")
+    from src.cli import node_cmd
+
+    node_cmd.add_parser(sub)
     return parser
 
 
@@ -334,10 +351,20 @@ COMMANDS = {
 }
 
 
+def cmd_node(settings: Settings, args: argparse.Namespace) -> int:
+    from src.cli import node_cmd
+
+    return node_cmd.run(settings, args)
+
+
+COMMANDS["node"] = cmd_node
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = load_settings()
-    if args.command not in ("tui", None, "mcp"):
+    serving = args.command == "node" and args.node_command == "serve"
+    if args.command not in ("tui", None, "mcp") and not serving:
         logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     return COMMANDS[args.command](settings, args)
 

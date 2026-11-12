@@ -1,0 +1,37 @@
+# Self-host an Anamnesis node on any server with Docker (VPS, NAS, home server).
+#
+#   1. Point a domain (e.g. memory.example.com) at this server.
+#   2. Create a `.env` next to this file:
+#        ANAMNESIS_DOMAIN=memory.example.com
+#        ANAMNESIS_NODE_PASSWORD=<12+ characters>
+#   3. docker compose up -d
+#   4. On each computer: anam node link https://memory.example.com
+#
+# Caddy gets and renews the HTTPS certificate automatically (ports 80 and 443 must be open).
+# Behind Cloudflare Tunnel or another proxy instead? Remove the caddy service and expose
+# anamnesis:8080 to it.
+services:
+  anamnesis:
+    build: .
+    restart: unless-stopped
+    environment:
+      ANAMNESIS_NODE_PASSWORD: ${ANAMNESIS_NODE_PASSWORD:?set ANAMNESIS_NODE_PASSWORD in .env}
+      ANAMNESIS_NODE_URL: https://${ANAMNESIS_DOMAIN:?set ANAMNESIS_DOMAIN in .env}
+    volumes:
+      - anamnesis-data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${ANAMNESIS_DOMAIN} --to anamnesis:8080
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - anamnesis
+
+volumes:
+  anamnesis-data:
+  caddy-data:

@@ -169,3 +169,6 @@ class VectorIndex:
 
     def delete_thread(self, thread_id: str) -> None:
         self._table.delete(f"thread_id = {_sql_str(thread_id)}")
+
+    def clear(self) -> None:
+        self._table.delete("message_id >= 0")

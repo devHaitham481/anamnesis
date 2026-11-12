@@ -483,6 +483,13 @@ class Database:
                 (path, signature, time.time()),
             )
 
+    async def wipe(self) -> None:
+        """Delete every conversation and all import/sync progress (used by `anam node wipe`)."""
+        async with self._write() as conn:
+            await conn.execute("DELETE FROM messages")
+            await conn.execute("DELETE FROM threads")
+            await conn.execute("DELETE FROM ingest_state")
+
 
 def _thread_filter(source: str | None, project: str | None) -> tuple[str, tuple[str, ...]]:
     clauses: list[str] = []

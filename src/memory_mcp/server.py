@@ -1,7 +1,8 @@
-"""Stdio MCP server: lets any MCP-capable agent search and add to the shared memory.
+"""MCP server: lets any MCP-capable agent search and add to the shared memory.
 
-Started by the client (e.g. `claude mcp add anamnesis -- anam-mcp`). While it runs it also keeps
-importing new history from the other tools in the background, so memory stays fresh.
+Locally it runs over stdio, started by the client (e.g. `claude mcp add anamnesis -- anam-mcp`),
+and keeps importing new history from the other tools in the background. An Anamnesis node serves
+the same tools over HTTP with OAuth, for web-chat connectors (see `src/node`).
 """
 
 from __future__ import annotations
@@ -10,10 +11,13 @@ import asyncio
 import contextlib
 import datetime as dt
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from typing import Any
 
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from src.config import Settings, load_settings
 from src.core.memory import MemoryService
@@ -83,21 +87,58 @@ def format_threads(threads: list[Thread]) -> str:
     )
 
 
+# Called for every tool call with (tool, detail); the node uses it for its activity log.
+ActivityHook = Callable[[str, str], Awaitable[None]]
+Background = Callable[[MemoryService, asyncio.Event], Coroutine[Any, Any, None]]
+
+
+async def _record(tool: str, detail: str) -> None:
+    hook: ActivityHook | None = _state.get("activity")
+    if hook is not None:
+        try:
+            await hook(tool, detail)
+        except Exception:
+            log.exception("activity log failed")
+
+
+def _require_write() -> None:
+    """Over OAuth, saving needs the write scope the owner granted on the consent page."""
+    token = get_access_token()
+    if token is not None and "memory:write" not in token.scopes:
+        raise ToolError(
+            "This connection is read-only. To let it save notes, remove and re-add the connector "
+            "and tick “Allow saving notes” when you sign in."
+        )
+
+
 def build_server(
     settings: Settings | None = None,
     service: MemoryService | None = None,
     sync: bool | None = None,
+    *,
+    auth: AuthSettings | None = None,
+    auth_provider: Any = None,
+    background: Background | None = None,
+    activity: ActivityHook | None = None,
 ) -> MCPServer[Any]:
-    """Create the MCP server. Inject `service` in tests; otherwise it is opened at startup."""
+    """Create the MCP server. Inject `service` in tests; otherwise it is opened at startup.
+
+    `background` replaces the default background job (importing local tool history), e.g. the
+    node's sync loop. `auth` + `auth_provider` turn on OAuth (HTTP transport only).
+    """
 
     @contextlib.asynccontextmanager
     async def lifespan(_: MCPServer[Any]) -> AsyncIterator[None]:
         own = service is None
         svc = service or await MemoryService.create(settings or load_settings())
         _state["service"] = svc
+        if activity is not None:
+            _state["activity"] = activity
         stop = asyncio.Event()
-        task = None
-        if svc.settings.memory_sync if sync is None else sync:
+        task: asyncio.Task[None] | None = None
+        if background is not None:
+            task = asyncio.create_task(background(svc, stop))
+        elif svc.settings.memory_sync if sync is None else sync:
             from src.ingest.runner import watch
 
             task = asyncio.create_task(
@@ -112,6 +153,7 @@ def build_server(
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
             _state.pop("service", None)
+            _state.pop("activity", None)
             if own:
                 await svc.close()
 
@@ -120,6 +162,8 @@ def build_server(
         title="Anamnesis shared memory",
         instructions=INSTRUCTIONS,
         lifespan=lifespan,
+        auth=auth,
+        auth_server_provider=auth_provider,
     )
 
     @server.tool()
@@ -138,6 +182,7 @@ def build_server(
         hits = await _service().search(
             query, k=max(1, min(limit, 25)), source=source or None, project=project or None
         )
+        await _record("search_memory", query)
         return format_hits(hits)
 
     @server.tool()
@@ -148,6 +193,7 @@ def build_server(
         threads = await _service().list_threads(
             limit=max(1, min(limit, 100)), source=source or None, project=project or None
         )
+        await _record("recent_conversations", source or project or "all")
         return format_threads(threads)
 
     @server.tool()
@@ -156,6 +202,7 @@ def build_server(
         svc = _service()
         thread = await svc.get_thread(thread_id)
         msgs = await svc.messages(thread_id, limit=max(1, min(last_n, 200)))
+        await _record("get_conversation", thread.title)
         head = f"{thread.title} — {_label(thread.source)}" + (
             f" · {thread.project}" if thread.project else ""
         )
@@ -172,7 +219,9 @@ def build_server(
             note: Self-contained text worth recalling later (include the why).
             topic: Optional grouping, e.g. a project name ("anamnesis") or "preferences".
         """
+        _require_write()
         thread = await _service().remember(note, topic=topic)
+        await _record("remember", note)
         return f'Saved to "{thread.title}".'
 
     return server

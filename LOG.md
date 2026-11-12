@@ -111,3 +111,19 @@ An independent review agent audited the codebase; all findings fixed with regres
 - **Existing data:** chats made with the old built-in chat stay in memory (source `anamnesis`, shown as "Anamnesis chat (legacy)") and still sync across devices. The unused `threads.model` / `system_prompt` columns and `providers` table stay in old databases.
 - **Verified:** 83 tests pass (3 runs), including the Playwright browser e2e and MCP over stdio. Ruff and mypy clean. `anam status` and `anam search` work against the real `~/.anamnesis` database.
 
+## 2026-11-12 — Always-on node (self-hosted) + web-chat connectors
+**Goal (user):** claude.ai / ChatGPT can use the memory, without a Mac that must stay awake. For other people too: open source, self-hosted (no Anamnesis cloud). Chosen: Docker + Fly.io, the node replaces folder sync as the recommended setup, password sign-in.
+
+- **Sync stores (`src/core/devices.py`):** the same encrypted segments now live in a `FolderStore` (iCloud, Dropbox…) or a `NodeStore` (HTTPS). Sync progress is keyed per store (node URL + key), so switching from a folder to a node, or re-linking after a wipe, re-uploads correctly. **Scope** per computer: everything / everything except project folders / notes only. Changing it re-exports (idempotent).
+- **Node (`src/node/app.py`, `anam node serve`):** one Starlette app. `/sync/*` hub API (append-only, segments must decrypt, device ids validated), `/mcp` remote MCP, `/consent` sign-in page, `/admin/*` status/activity/revoke/wipe. The node is itself a sync device: it imports every computer's uploads and publishes notes that web apps save. Indexing for semantic search runs in its own task, so a large first upload never delays new syncs.
+- **OAuth (`src/node/auth.py`):** the node is its own authorization server (MCP SDK provider): dynamic client registration, PKCE, consent page with the node password and a "may save notes" checkbox (scopes `memory:read` / `memory:write`), rotating refresh tokens, tokens stored hashed, rate-limited password attempts, every tool call logged.
+- **CLI:** `anam node deploy fly | link | scope | status | activity | revoke | wipe | serve`, `anam connect claude-web | chatgpt-web`.
+- **Deploy:** `Dockerfile` (non-root, healthcheck), `docker-compose.yml` with Caddy for automatic HTTPS, `fly.toml`. Fly.io has no general "deploy button" (only its dashboard "Launch from GitHub" flow), so `anam node deploy fly` does it in one command.
+- **Bugs found by tests:** after a wipe, re-linking reused old sync progress, so nothing was re-uploaded (fixed: progress keyed on URL + key). The read-only refusal reached the model as a generic error (fixed: `ToolError`).
+- **Verified:**
+  - 11 node tests over real HTTP: linking, two computers syncing through the node, scope, rejected/forged requests, rate limiting, the full OAuth flow as claude.ai does it, MCP over HTTP, read-only enforcement, activity, revoke, refresh rotation, wipe + re-link, and the CLI.
+  - Built the Docker image (1.09 GB) and ran it: link + sync of a 6.5k-message history, and a note arriving in ~2 s during indexing.
+  - Under `--cpus=1 --memory=1g` (a Fly machine) the first-upload indexing peaked at ~760 MB without being killed, and the node answered in under 1 s.
+  - Full suite: 94 passed (3 runs). Ruff and mypy clean.
+- **Not verified:** a real Fly.io deploy (flyctl isn't installed here), and real claude.ai / ChatGPT connectors (they need a public HTTPS node). The ChatGPT setup steps are written from memory of its UI and may need adjusting.
+

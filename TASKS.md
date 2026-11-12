@@ -49,3 +49,16 @@
 ### Sprint 6: Single Purpose
 
 - [x] Remove the chat gateway (LiteLLM router, chat service, model switching, chat UI in TUI and web, API keys). The TUI and web UI are now memory browsers only.
+
+### Sprint 7: Always-on Node (self-hosted) + Web Chat Connectors
+
+Goal: claude.ai / ChatGPT (web + mobile) can search memory and save notes even when every computer is asleep. Each user runs their own node; there is no hosted Anamnesis service.
+
+- [x] Sync storage abstraction: folder (iCloud, Dropbox, …) or node, same encrypted segment format.
+- [x] `anam node serve`: sync hub for all computers (HTTPS API), keeps its own searchable copy.
+- [x] `anam node link URL`: link a computer with the node password; choose what to upload (all / exclude projects / notes only).
+- [x] Remote MCP at `/mcp` with built-in OAuth (password sign-in page; read-only or read + save notes).
+- [x] `anam connect claude-web` / `chatgpt-web`: print URL + setup steps.
+- [x] `anam node activity` / `revoke` / `wipe`.
+- [x] Dockerfile + docker-compose; `fly.toml` + `anam node deploy fly`.
+- [x] Docs: self-hosting guide.
