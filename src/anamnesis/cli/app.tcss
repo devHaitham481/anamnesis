@@ -1,97 +1,182 @@
 Screen {
     layout: vertical;
+    background: $background;
 }
 
-#body {
-    height: 1fr;
+/* ---------- top bar: wordmark + memory stats ---------- */
+
+#topbar {
+    height: 1;
+    padding: 0 2;
+    margin-bottom: 1;
 }
 
-#sidebar {
-    width: 32;
-    border-right: solid $panel-lighten-2;
-    background: $surface;
-}
-
-#sidebar-title {
-    padding: 0 1;
-    text-style: bold;
-    color: $text-muted;
-    width: 100%;
-}
-
-#threads {
-    height: 1fr;
-    background: $surface;
-}
-
-#threads > ListItem {
-    padding: 0 1;
-}
-
-#threads > ListItem.current {
-    background: $primary 30%;
-    text-style: bold;
-}
-
-#main {
-    width: 1fr;
+#brand {
+    width: auto;
 }
 
 #status {
     width: 1fr;
-    padding: 0 2;
+    text-align: right;
     color: $text-muted;
 }
 
-#view {
+/* ---------- panels ---------- */
+
+#body {
     height: 1fr;
     padding: 0 1;
 }
 
+#sidebar {
+    width: 40;
+    border: round $border-blurred;
+    border-title-color: $text-muted;
+    border-subtitle-color: $text-muted;
+    background: $background;
+}
+
+#sidebar:focus-within {
+    border: round $primary;
+    border-title-color: $primary;
+}
+
+#threads {
+    height: 1fr;
+    background: $background;
+    padding: 0;
+}
+
+#threads > ListItem {
+    height: 3;
+    padding: 0 1 1 1;
+    background: $background;
+}
+
+#threads > ListItem.current {
+    background: $panel;
+}
+
+#threads:focus > ListItem.-highlight {
+    background: $primary 18%;
+}
+
+#threads > ListItem.-highlight {
+    background: $panel;
+}
+
+.thread-title {
+    width: 1fr;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+
+#threads > ListItem.current .thread-title {
+    text-style: bold;
+}
+
+.thread-meta {
+    width: 1fr;
+    padding-left: 2;
+    color: $text-muted;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+
+#main {
+    width: 1fr;
+    margin-left: 1;
+}
+
+#prompt {
+    height: 3;
+    border: round $border-blurred;
+    border-title-color: $text-muted;
+    background: $background;
+    padding: 0 1;
+}
+
+#prompt:focus {
+    border: round $primary;
+    border-title-color: $primary;
+    background: $background;
+}
+
+#view {
+    height: 1fr;
+    border: round $border-blurred;
+    border-title-color: $foreground;
+    border-title-style: bold;
+    border-subtitle-color: $text-muted;
+    padding: 0 2 1 2;
+    background: $background;
+    scrollbar-size-vertical: 1;
+}
+
+#view:focus-within {
+    border: round $primary;
+}
+
 #empty {
     width: 100%;
-    padding: 2 4;
+    padding: 2 2;
     color: $text-muted;
 }
+
+/* ---------- messages ---------- */
 
 .message {
     height: auto;
     margin: 1 0 0 0;
-    padding: 0 1;
-    border-left: thick $panel-lighten-2;
-}
-
-.message.user {
-    border-left: thick $accent;
-}
-
-.message.assistant {
-    border-left: thick $primary;
+    padding: 0 0 0 2;
+    border-left: outer $border-blurred;
 }
 
 .message.note {
-    border-left: thick $secondary;
-    color: $text-muted;
+    border-left: outer $text-muted;
 }
 
 .message.error {
-    border-left: thick $error;
+    border-left: outer $error;
 }
 
 .message-header {
-    text-style: bold;
-    color: $text-muted;
+    width: 1fr;
 }
 
 .message Markdown {
     margin: 0;
     padding: 0;
-}
-
-#prompt {
-    margin: 0 1 1 1;
+    background: $background;
 }
 
 .message Markdown > *:last-child {
     margin-bottom: 0;
+}
+
+Footer {
+    background: $background;
+    padding: 0 1;
+}
+
+/* ---------- search results ---------- */
+
+.message.search {
+    border-left: none;
+    padding: 0;
+}
+
+.result {
+    height: auto;
+    margin-top: 1;
+}
+
+.result-meta {
+    padding-left: 4;
+    color: $text-muted;
+}
+
+.result-snippet {
+    padding-left: 4;
+    color: $foreground 85%;
 }

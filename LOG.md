@@ -137,3 +137,15 @@ An independent review agent audited the codebase; all findings fixed with regres
 - **Node image:** `.github/workflows/docker.yml` pushes `ghcr.io/devhaitham481/anamnesis` (latest, sha, semver tags; amd64 + arm64). `docker-compose.yml` uses it. `anam node deploy fly` deploys it by default (`--build` deploys a checkout). Built and smoke-tested locally (`/healthz` ok).
 - **Tests:** +4 setup tests (fake home: no tools, connect + re-run, asks first and never edits without a terminal, disconnect all), stale-entry repair, and deploy-fly with a fake flyctl that records calls and the generated fly.toml.
 - **Package name:** the distribution is now `anamnesis-cli`; `anamnesis` and `anamnesis-memory` are taken on PyPI. The command (`anam`) and the import package (`anamnesis`) are unchanged. `install.sh` removes a tool installed under the old name. `.github/workflows/release.yml` publishes to PyPI on a `v*` tag through trusted publishing; it needs a one-time pending publisher on pypi.org.
+
+## 2026-11-13 — Terminal UI redesign
+
+- **Patterns borrowed from Elia, Posting, Harlequin and lazygit:** titled rounded panels (the focused one lights up), the search box on top, two-line list rows, and color per category.
+- **Look:**
+  - An `anamnesis` theme in the website's palette: warm charcoal with a rust accent.
+  - A slim top bar (wordmark + stats) replaces Textual's Header.
+  - Conversation rows show a dot in the tool's color and the title, then "tool · project · 2h ago" dimmed.
+  - The conversation panel shows the title in its border, and tool and project below.
+- **Messages:** a colored bar per speaker (you in sand, each tool in its own color), the name in bold and a dimmed time.
+- **Search:** one card per conversation (its best message), with a snippet centered on the match, the query words highlighted and Markdown markers removed. Results scroll into view.
+- **Screenshots:** `scripts/screenshot.py` now renders `docs/screenshot.svg` and `docs/search.svg` from 11 sample conversations dated relative to today.

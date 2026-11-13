@@ -21,7 +21,7 @@
 
 <p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/screenshot.svg" alt="The Anamnesis terminal UI: Claude Code recalling a decision made in ChatGPT" width="900"></p>
 
-<p align="center"><sub>The terminal UI, with sample data.</sub></p>
+<p align="center"><sub>The terminal UI (<code>anam</code>), with sample data.</sub></p>
 
 Anamnesis collects your conversations from **Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini** into one memory on your computer, and gives it back to every AI tool over [MCP](https://modelcontextprotocol.io). Ask Claude Code "what did we decide about auth?" and it finds the answer, even if you worked it out in ChatGPT.
 
@@ -85,6 +85,8 @@ rm -rf ~/.anamnesis          # your memory; skip this to keep it
 ## Using it
 
 Just keep working. While any connected tool is running, new conversations sync in the background, and agents search the memory when you refer to earlier work.
+
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/search.svg" alt="Searching memory: one result per conversation, from ChatGPT, Claude Code and a saved note" width="900"></p>
 
 ```bash
 anam                         # browse and search everything in the terminal

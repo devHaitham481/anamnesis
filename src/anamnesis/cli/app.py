@@ -12,18 +12,28 @@ import logging
 import time
 from datetime import datetime
 
+from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Footer, Header, Input, Label, ListView, Static
+from textual.widgets import Footer, Input, Label, ListView, Static
 
 from anamnesis.cli.commands import Command, CommandError, help_text, is_command, parse_command
-from anamnesis.cli.widgets import MessageView, ThreadItem
+from anamnesis.cli.widgets import (
+    RUST,
+    THEME,
+    MessageView,
+    SearchResultsView,
+    ThreadItem,
+    project_name,
+    relative_time,
+    snippet,
+)
 from anamnesis.config import Settings, load_settings
 from anamnesis.core.db import ThreadNotFoundError
 from anamnesis.core.memory import MemoryService
-from anamnesis.core.models import SOURCE_LABELS, Message, Thread
+from anamnesis.core.models import SOURCE_LABELS, Message, SearchHit, Thread
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +59,8 @@ class AnamnesisApp(App[None]):
 
     def __init__(self, settings: Settings | None = None, service: MemoryService | None = None):
         super().__init__()
+        self.register_theme(THEME)
+        self.theme = THEME.name
         self.settings = settings or load_settings()
         self.service: MemoryService | None = service
         self._owns_service = service is None
@@ -66,15 +78,18 @@ class AnamnesisApp(App[None]):
     # ---------- layout ----------
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        with Horizontal(id="topbar"):
+            yield Label(Text.assemble(("◉ ", RUST), ("anamnesis", "bold")), id="brand")
+            yield Static("Loading memory…", id="status")
         with Horizontal(id="body"):
-            with Vertical(id="sidebar"):
-                yield Label("CONVERSATIONS", id="sidebar-title")
+            with Vertical(id="sidebar") as sidebar:
+                sidebar.border_title = "Conversations"
                 yield ListView(id="threads")
             with Vertical(id="main"):
-                yield Static("Loading memory…", id="status")
+                prompt = Input(placeholder="Loading…", id="prompt", disabled=True)
+                prompt.border_title = "Search"
+                yield prompt
                 yield VerticalScroll(id="view")
-                yield Input(placeholder="Loading…", id="prompt", disabled=True)
         yield Footer()
 
     @property
@@ -110,7 +125,7 @@ class AnamnesisApp(App[None]):
             self._show_empty()
         prompt = self.query_one("#prompt", Input)
         prompt.disabled = False
-        prompt.placeholder = "Search all memory…  (/help for commands)"
+        prompt.placeholder = "Search everything you've discussed with any AI tool   ·   /help"
         prompt.focus()
         self.set_interval(self.settings.sync_interval, self._poll)
         if self.settings.memory_sync:
@@ -151,15 +166,16 @@ class AnamnesisApp(App[None]):
         if self.service is None:
             return
         counts = await self.svc.source_counts()
-        mode = "semantic + keyword search" if self.svc.index else "keyword search only"
+        mode = "semantic search" if self.svc.index else "keyword search only"
+        n, k = sum(counts.values()), len(counts)
         self.query_one("#status", Static).update(
-            f"{sum(counts.values())} conversations from {len(counts)} sources · {mode}"
+            f"{n} conversation{'s' if n != 1 else ''} · {k} tool{'s' if k != 1 else ''} · {mode}"
         )
 
     def _show_empty(self) -> None:
         self.view.remove_children()
         self.view.mount(Static(EMPTY_HINT, id="empty"))
-        self.sub_title = ""
+        self._set_title(None)
 
     async def _mount(self, view: MessageView) -> None:
         for empty in self.view.query("#empty"):
@@ -172,7 +188,9 @@ class AnamnesisApp(App[None]):
         await self._mount(MessageView.from_message(msg, source))
 
     async def _note(self, markdown: str, kind: str = "note") -> None:
-        await self._mount(MessageView(kind, "Anamnesis" if kind == "note" else "Error", markdown))
+        header = "Anamnesis" if kind == "note" else "Error"
+        color = RUST if kind == "note" else "#e5534b"
+        await self._mount(MessageView(kind, header, markdown, color=color))
 
     # ---------- threads ----------
 
@@ -187,6 +205,7 @@ class AnamnesisApp(App[None]):
         lv = self.query_one("#threads", ListView)
         await lv.clear()
         await lv.extend(ThreadItem(t) for t in threads)
+        self.query_one("#sidebar").border_subtitle = str(len(threads))
         self._mark_current()
         if self.thread_id is not None and all(t.id != self.thread_id for t in threads):
             # Current thread was deleted (possibly from another client).
@@ -195,9 +214,20 @@ class AnamnesisApp(App[None]):
         else:
             for t in threads:
                 if t.id == self.thread_id:
-                    self.sub_title = _subtitle(t)
+                    self._set_title(t)
         await self._update_status()
         return threads
+
+    def _set_title(self, thread: Thread | None) -> None:
+        view = self.view
+        if thread is None:
+            self.sub_title = ""
+            view.border_title = view.border_subtitle = ""
+            return
+        self.sub_title = _subtitle(thread)
+        view.border_title = thread.title
+        meta = [SOURCE_LABELS.get(thread.source, thread.source), project_name(thread.project)]
+        view.border_subtitle = " · ".join(m for m in meta if m)
 
     def _mark_current(self) -> None:
         lv = self.query_one("#threads", ListView)
@@ -216,7 +246,7 @@ class AnamnesisApp(App[None]):
             return
         self.thread_id = thread.id
         self._thread_source = thread.source
-        self.sub_title = _subtitle(thread)
+        self._set_title(thread)
         self._mark_current()  # highlight immediately, before the (slower) message render
         self._cursor = max(self._cursor, await svc.latest_message_id())
         msgs = await svc.messages(thread.id, limit=MAX_RENDERED_MESSAGES)
@@ -295,17 +325,25 @@ class AnamnesisApp(App[None]):
             self._memory_sync_now()
         elif cmd.name == "search":
             hits = await svc.search(cmd.arg, k=10)
-            self._listing = [h.thread_id for h in hits]
             if not hits:
                 await self._note(f"No results for _{cmd.arg}_.")
                 return
-            lines = []
-            for i, h in enumerate(hits, 1):
-                snippet = " ".join(h.content.split())
-                snippet = snippet if len(snippet) <= 160 else snippet[:159] + "…"
+            best: dict[str, SearchHit] = {}  # one result per conversation, its best message
+            for h in hits:
+                best.setdefault(h.thread_id, h)
+            self._listing = list(best)
+            rows, lines = [], []
+            for i, h in enumerate(best.values(), 1):
                 where = SOURCE_LABELS.get(h.source or "", h.source or "")
-                lines.append(f"{i}. **{h.thread_title}** · {where} ({h.role}): {snippet}")
-            await self._note(f"**Search: {cmd.arg}** (open with `/open N`)\n\n" + "\n".join(lines))
+                when = relative_time(h.created_at) if h.created_at else ""
+                meta = " · ".join(p for p in (where, project_name(h.project), when) if p)
+                rows.append((h.source or "", h.thread_title or "Untitled", meta, h.content))
+                lines.append(f"{i}. **{h.thread_title}** · {meta}: {snippet(h.content, [])}")
+            markdown = f"**Search: {cmd.arg}** (open with `/open N`)\n\n" + "\n".join(lines)
+            results = SearchResultsView(cmd.arg, rows, markdown)
+            await self._mount(results)
+            # After layout, so the first result (not the end of the list) is in view.
+            self.call_after_refresh(self.view.scroll_to_widget, results, top=True, animate=False)
         elif cmd.name == "open":
             n = int(cmd.arg)
             if not 1 <= n <= len(self._listing):
