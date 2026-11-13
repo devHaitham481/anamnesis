@@ -8,6 +8,7 @@ import math
 import os
 import re
 import threading
+import warnings
 from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
@@ -60,6 +61,8 @@ class FastEmbedEmbedder:
         ):
             os.environ.setdefault(var, value)
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+        # fastembed re-enables progress bars, which warns because the env var above wins.
+        warnings.filterwarnings("ignore", message="Cannot enable progress bars")
         from fastembed import TextEmbedding
 
         self._model = TextEmbedding(model_name, cache_dir=str(cache_dir) if cache_dir else None)
