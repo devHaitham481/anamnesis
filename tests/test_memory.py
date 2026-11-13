@@ -368,3 +368,24 @@ def test_refuses_to_clobber_invalid_config(fake_home: Path) -> None:
     with pytest.raises(ValueError):
         targets()["cursor"].connect()
     assert cfg.read_text() == "[1, 2]"
+
+
+def test_claude_cli_never_gets_the_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`claude` crashes on macOS when its stdin is /dev/tty (as under `curl | sh`)."""
+    import subprocess
+
+    from anamnesis import connect
+
+    seen: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        seen.update(kw)
+        stack = "45 |   return applyHandlers(...)\nerror: EINVAL: invalid argument, kqueue\n  at x"
+        return subprocess.CompletedProcess(cmd, 1, "", stack)
+
+    monkeypatch.setattr(connect, "_claude_bin", lambda: "/bin/claude")
+    monkeypatch.setattr(connect.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError) as err:
+        connect._claude_code_connect()
+    assert seen["stdin"] is subprocess.DEVNULL
+    assert str(err.value) == "error: EINVAL: invalid argument, kqueue"  # one line, not a stack

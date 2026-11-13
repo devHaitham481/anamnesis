@@ -189,7 +189,24 @@ def _claude_run(*args: str) -> subprocess.CompletedProcess[str]:
     exe = _claude_bin()
     if exe is None:
         raise FileNotFoundError("the `claude` CLI is not on PATH")
-    return subprocess.run([exe, "mcp", *args], capture_output=True, text=True, timeout=60)
+    # stdin is never the terminal: `claude` (Bun) crashes with "EINVAL ... kqueue" on macOS when
+    # handed /dev/tty, which is what `anam setup` gets when run by the installer.
+    return subprocess.run(
+        [exe, "mcp", *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def _short_error(res: subprocess.CompletedProcess[str]) -> str:
+    """The line that says what went wrong, not a whole stack trace."""
+    lines = [ln.strip() for ln in (res.stderr or res.stdout or "").splitlines() if ln.strip()]
+    for ln in lines:
+        if ln.lower().startswith("error"):
+            return ln[:200]
+    return (lines[-1] if lines else f"exit code {res.returncode}")[:200]
 
 
 def _claude_code_connected() -> bool:
@@ -217,7 +234,7 @@ def _claude_code_connect() -> str:
     command, args = server_command()
     res = _claude_run("add", "--scope", "user", SERVER_NAME, "--", command, *args)
     if res.returncode != 0:
-        raise RuntimeError((res.stderr or res.stdout).strip())
+        raise RuntimeError(_short_error(res))
     return ("updated" if updating else "registered") + " with `claude mcp add --scope user`"
 
 
