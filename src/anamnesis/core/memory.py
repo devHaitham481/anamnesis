@@ -121,8 +121,10 @@ class MemoryService:
         if self.index is not None:
             await asyncio.to_thread(self.index.clear)
 
-    async def messages(self, thread_id: str, limit: int | None = None) -> list[Message]:
-        return await self.db.get_messages(thread_id, limit=limit)
+    async def messages(
+        self, thread_id: str, limit: int | None = None, before: int | None = None
+    ) -> list[Message]:
+        return await self.db.get_messages(thread_id, limit=limit, before=before)
 
     # ---------- change feed (live updates in the TUI and web UI) ----------
 

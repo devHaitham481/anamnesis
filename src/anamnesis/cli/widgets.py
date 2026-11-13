@@ -7,11 +7,14 @@ import time
 from datetime import datetime
 from pathlib import PurePath
 
+from rich.console import Group
+from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
+from rich.theme import Theme as RichTheme
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.theme import Theme
-from textual.widgets import Label, ListItem, Markdown, Static
+from textual.widgets import Label, ListItem, Static
 
 from anamnesis.core.models import SOURCE_LABELS, Message, Thread
 
@@ -47,6 +50,23 @@ THEME = Theme(
     },
 )
 
+# Rich draws message Markdown; its defaults (bright cyan code, etc.) clash with the palette.
+MARKDOWN_STYLES = RichTheme(
+    {
+        "markdown.code": "#e8c08a on #221f1c",
+        "markdown.h1": f"bold {RUST}",
+        "markdown.h2": f"bold {RUST}",
+        "markdown.h3": "bold #ece8e1",
+        "markdown.h4": "bold #ece8e1",
+        "markdown.link": "underline #c9a26b",
+        "markdown.link_url": "#8a8378",
+        "markdown.block_quote": "#b5ada1",
+        "markdown.item.bullet": RUST,
+        "markdown.item.number": RUST,
+        "markdown.hr": "#2f2b27",
+    }
+)
+
 # One color per tool, so where a conversation came from is visible at a glance.
 SOURCE_COLORS = {
     "claude-code": "#d97757",
@@ -60,6 +80,7 @@ SOURCE_COLORS = {
     "anamnesis": "#8a8378",
 }
 MUTED = "#8a8378"
+BLURRED = "#2f2b27"  # border of a panel without focus
 YOU = "#c9a26b"  # your own messages: warm sand, distinct from every tool's color
 
 # Short badges, used in /history listings and kept for backwards compatibility.
@@ -109,16 +130,35 @@ def thread_meta(thread: Thread, now: float | None = None) -> str:
 
 
 class ThreadItem(ListItem):
-    """Two lines: a dot in the tool's color and the title, then tool · project · when."""
+    """Two lines: a dot in the tool's color and the title, then tool · project · when.
+
+    Rendered directly (no child widgets): Textual restyles a focused widget's whole subtree,
+    so fewer widgets per row keeps moving focus to the list fast.
+    """
 
     def __init__(self, thread: Thread) -> None:
-        title = Text.assemble(("● ", source_color(thread.source)), thread.title or "Untitled")
-        super().__init__(
-            Label(title, classes="thread-title"),
-            Label(thread_meta(thread), classes="thread-meta", markup=False),
-        )
+        super().__init__()
         self.thread_id = thread.id
         self.source = thread.source
+        self._title = thread.title or "Untitled"
+        self._meta = thread_meta(thread)
+
+    def update(self, thread: Thread) -> None:
+        title, meta = thread.title or "Untitled", thread_meta(thread)
+        if (title, meta) != (self._title, self._meta):
+            self._title, self._meta = title, meta
+            self.refresh()
+
+    def render(self) -> Text:
+        width = max(self.content_size.width, 1)
+        title = Text.assemble(
+            ("● ", source_color(self.source)),
+            (self._title, "bold" if self.has_class("current") else ""),
+        )
+        meta = Text(f"  {self._meta}", style=MUTED)
+        for line in (title, meta):
+            line.truncate(width, overflow="ellipsis")
+        return Text("\n").join([title, meta])
 
 
 def message_header(msg: Message, source: str | None = None) -> str:
@@ -149,15 +189,18 @@ class MessageView(Vertical):
         self._content = content
         self._color = color
         self._when = when
-        self.body = Markdown(content)
+        # Header and body in one Static, with Rich rendering the Markdown: Textual's Markdown
+        # widget builds a widget per block, which made large conversations slow to open and
+        # every focus change slow to restyle.
+        who = header.split(" · ")[0]
+        line = Text(who, style=f"bold {color or MUTED}")
+        if when is not None:
+            stamp = datetime.fromtimestamp(when)
+            line.append(f"  {stamp:%b} {stamp.day} · {stamp:%H:%M}", style=MUTED)
+        markdown = RichMarkdown(content, code_theme="monokai", inline_code_theme="monokai")
+        self.body = Static(Group(line, markdown), classes="body")
 
     def compose(self) -> ComposeResult:
-        who = self._header.split(" · ")[0]
-        line = Text(who, style=f"bold {self._color or MUTED}")
-        if self._when is not None:
-            stamp = datetime.fromtimestamp(self._when)
-            line.append(f"  {stamp:%b} {stamp.day} · {stamp:%H:%M}", style=MUTED)
-        yield Label(line, classes="message-header")
         yield self.body
 
     def on_mount(self) -> None:

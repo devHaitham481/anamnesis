@@ -38,11 +38,6 @@ Screen {
     background: $background;
 }
 
-#sidebar:focus-within {
-    border: round $primary;
-    border-title-color: $primary;
-}
-
 #threads {
     height: 1fr;
     background: $background;
@@ -66,24 +61,6 @@ Screen {
 
 #threads > ListItem.-highlight {
     background: $panel;
-}
-
-.thread-title {
-    width: 1fr;
-    text-wrap: nowrap;
-    text-overflow: ellipsis;
-}
-
-#threads > ListItem.current .thread-title {
-    text-style: bold;
-}
-
-.thread-meta {
-    width: 1fr;
-    padding-left: 2;
-    color: $text-muted;
-    text-wrap: nowrap;
-    text-overflow: ellipsis;
 }
 
 #main {
@@ -116,8 +93,11 @@ Screen {
     scrollbar-size-vertical: 1;
 }
 
-#view:focus-within {
-    border: round $primary;
+#earlier {
+    width: 100%;
+    padding: 1 0 0 0;
+    color: $text-muted;
+    text-align: center;
 }
 
 #empty {
@@ -147,14 +127,9 @@ Screen {
     width: 1fr;
 }
 
-.message Markdown {
-    margin: 0;
-    padding: 0;
-    background: $background;
-}
-
-.message Markdown > *:last-child {
-    margin-bottom: 0;
+.message .body {
+    width: 1fr;
+    height: auto;
 }
 
 Footer {

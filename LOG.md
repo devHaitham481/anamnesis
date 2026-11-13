@@ -149,3 +149,19 @@ An independent review agent audited the codebase; all findings fixed with regres
 - **Messages:** a colored bar per speaker (you in sand, each tool in its own color), the name in bold and a dimmed time.
 - **Search:** one card per conversation (its best message), with a snippet centered on the match, the query words highlighted and Markdown markers removed. Results scroll into view.
 - **Screenshots:** `scripts/screenshot.py` now renders `docs/screenshot.svg` and `docs/search.svg` from 11 sample conversations dated relative to today.
+
+## 2026-11-13 — Terminal UI speed
+
+Measured on a copy of a real memory (63 conversations, largest 1,833 messages):
+
+| Action | Before | After |
+|---|---|---|
+| Open the largest conversation | 8.4 s | 0.26 s |
+| Tab between panels | ~1.8 s | ~0.08 s CPU |
+| Startup | 3.8 s | 0.26 s |
+
+- **Message bodies:** rendered by Rich in a single Static each, header included. Textual's `Markdown` widget built a widget per block, so 200 messages made about 2,000 widgets. A Rich theme keeps the palette for code, headings and links.
+- **Paging:** a conversation opens with its latest 40 messages. Earlier pages load when you scroll to the top, and the message you were reading stays in place.
+- **Panel focus:** highlighted with inline border styles, not CSS `:focus-within`. That pseudo-class made Textual restyle the panel's whole subtree on every focus change.
+- **Sidebar rows:** each renders itself, with no child widgets. A background change that leaves the order alone updates rows in place instead of rebuilding the list; the cursor no longer jumps.
+- **Tests:** +2 (paging in order with nothing doubled; in-place updates keep the cursor).

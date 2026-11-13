@@ -140,3 +140,50 @@ async def test_app_creates_and_closes_its_own_service(settings) -> None:  # type
         assert "keyword search only" in str(app.query_one("#status").render())
     assert app.service.db._conn is None  # closed on exit
     assert s.db_path.exists()
+
+
+async def test_long_conversation_opens_with_latest_page_and_loads_earlier(
+    service: MemoryService,
+) -> None:
+    from anamnesis.cli.app import PAGE
+
+    texts = [f"message number {i}" for i in range(PAGE * 2 + 5)]
+    t, _ = await service.import_conversation(conversation("long", *texts, title="Long"))
+    app = AnamnesisApp(service.settings, service)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await wait_until(pilot, lambda: ready(app) and app.thread_id == t.id)
+        await wait_until(pilot, lambda: len(views(app)) >= PAGE)
+        assert views(app)[-1].content == texts[-1]  # opens at the latest message
+        assert app.query("#earlier")  # tells you there is more
+        for _ in range(3):  # scrolling to the top loads earlier pages
+            app.view.scroll_home(animate=False)
+            await pilot.pause(0.2)
+        await wait_until(pilot, lambda: len(views(app)) == len(texts))
+        assert [v.content for v in views(app)] == texts  # in order, nothing twice
+        assert not app.query("#earlier")
+
+
+async def test_background_updates_keep_the_list_and_your_cursor(service: MemoryService) -> None:
+    a, _ = await service.import_conversation(conversation("a", "one", title="A", start=1_000))
+    b, _ = await service.import_conversation(conversation("b", "two", title="B", start=2_000))
+    c, _ = await service.import_conversation(conversation("c", "three", title="C", start=3_000))
+    app = AnamnesisApp(service.settings, service)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await wait_until(pilot, lambda: ready(app) and app.thread_id == c.id)
+        lv = app.query_one("#threads", ListView)
+        before = list(app.query(ThreadItem))
+        lv.focus()
+        lv.index = 2  # browsing: cursor on A
+        # The open conversation (already at the top) gets a new message from a background sync.
+        await service.import_conversation(conversation("c", "three", "four", start=3_000))
+        await wait_until(pilot, lambda: any(v.content == "four" for v in views(app)))
+        await app._refresh_threads()
+        assert list(app.query(ThreadItem)) == before  # updated in place, not rebuilt
+        assert lv.index == 2
+
+        # A conversation moves to the top: the list is rebuilt, the cursor stays on A.
+        await service.import_conversation(conversation("b", "two", "newer", start=4_000))
+        await app._refresh_threads()
+        items = list(app.query(ThreadItem))
+        assert [i.thread_id for i in items] == [b.id, c.id, a.id]
+        assert items[lv.index or 0].thread_id == a.id

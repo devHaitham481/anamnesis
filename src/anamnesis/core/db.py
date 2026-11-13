@@ -275,17 +275,27 @@ class Database:
             created_at=now,
         )
 
-    async def get_messages(self, thread_id: str, limit: int | None = None) -> list[Message]:
-        """Messages in chronological order; with `limit`, only the most recent `limit`."""
+    async def get_messages(
+        self, thread_id: str, limit: int | None = None, before: int | None = None
+    ) -> list[Message]:
+        """Messages in chronological order; with `limit`, only the most recent `limit`.
+
+        `before` (a message id) pages backwards: only messages older than it.
+        """
+        where = "thread_id = ?"
+        params: list[object] = [thread_id]
+        if before is not None:
+            where += " AND id < ?"
+            params.append(before)
         if limit is None:
             rows = await self._fetchall(
-                f"SELECT {_MSG_COLS} FROM messages WHERE thread_id = ? ORDER BY id", (thread_id,)
+                f"SELECT {_MSG_COLS} FROM messages WHERE {where} ORDER BY id", tuple(params)
             )
         else:
             rows = await self._fetchall(
-                f"SELECT * FROM (SELECT {_MSG_COLS} FROM messages WHERE thread_id = ? "
+                f"SELECT * FROM (SELECT {_MSG_COLS} FROM messages WHERE {where} "
                 "ORDER BY id DESC LIMIT ?) ORDER BY id",
-                (thread_id, limit),
+                (*params, limit),
             )
         return [Message(**dict(r)) for r in rows]
 

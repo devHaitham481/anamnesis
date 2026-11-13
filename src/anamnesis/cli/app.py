@@ -17,10 +17,14 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, ListView, Static
 
 from anamnesis.cli.commands import Command, CommandError, help_text, is_command, parse_command
 from anamnesis.cli.widgets import (
+    BLURRED,
+    MARKDOWN_STYLES,
+    MUTED,
     RUST,
     THEME,
     MessageView,
@@ -37,7 +41,8 @@ from anamnesis.core.models import SOURCE_LABELS, Message, SearchHit, Thread
 
 log = logging.getLogger(__name__)
 
-MAX_RENDERED_MESSAGES = 200
+# A conversation opens with its latest PAGE messages; earlier ones load as you scroll up.
+PAGE = 40
 DELETE_CONFIRM_SECONDS = 10.0
 EMPTY_HINT = (
     "Nothing in memory yet.\n\n"
@@ -61,6 +66,7 @@ class AnamnesisApp(App[None]):
         super().__init__()
         self.register_theme(THEME)
         self.theme = THEME.name
+        self.console.push_theme(MARKDOWN_STYLES)  # Rich's Markdown colors, in our palette
         self.settings = settings or load_settings()
         self.service: MemoryService | None = service
         self._owns_service = service is None
@@ -74,6 +80,9 @@ class AnamnesisApp(App[None]):
         self._polling = False
         self._listing: list[str] = []
         self._delete_armed_at = 0.0
+        self._oldest_shown: int | None = None  # id of the oldest rendered message
+        self._has_earlier = False
+        self._loading_earlier = False
 
     # ---------- layout ----------
 
@@ -105,7 +114,25 @@ class AnamnesisApp(App[None]):
     # ---------- startup / shutdown ----------
 
     def on_mount(self) -> None:
+        self.watch(self.view, "scroll_y", self._scrolled, init=False)
+        self.watch(self.screen, "focused", self._focus_moved)
         self._initialize()
+
+    def _focus_moved(self, focused: Widget | None) -> None:
+        """Light up the panel that has focus.
+
+        Done with inline styles rather than CSS `:focus-within`: that pseudo-class makes Textual
+        restyle the panel's whole subtree on every focus change, which made Tab visibly slow.
+        """
+        for panel in (self.query_one("#sidebar"), self.view):
+            active = focused is not None and panel in focused.ancestors_with_self
+            panel.styles.border = ("round", RUST if active else BLURRED)
+            if panel.id == "sidebar":
+                panel.styles.border_title_color = RUST if active else MUTED
+
+    def _scrolled(self, y: float) -> None:
+        if y <= 1 and self._has_earlier and not self._loading_earlier:
+            self.run_worker(self._load_earlier(), group="earlier", exclusive=True)
 
     @work(exclusive=True, group="init")
     async def _initialize(self) -> None:
@@ -203,10 +230,23 @@ class AnamnesisApp(App[None]):
         self._threads_sig = await svc.threads_signature()
         threads = await svc.list_threads()
         lv = self.query_one("#threads", ListView)
-        await lv.clear()
-        await lv.extend(ThreadItem(t) for t in threads)
+        items = list(lv.query(ThreadItem))
+        if [i.thread_id for i in items] == [t.id for t in threads]:
+            # Same conversations in the same order (the usual case while you work): update the
+            # rows in place instead of rebuilding the list, and leave your cursor alone.
+            for item, t in zip(items, threads, strict=True):
+                item.update(t)
+        else:
+            highlighted = lv.highlighted_child
+            keep = highlighted.thread_id if isinstance(highlighted, ThreadItem) else None
+            await lv.clear()
+            await lv.extend(ThreadItem(t) for t in threads)
+            self._mark_current()
+            if keep is not None and lv.has_focus:  # you were browsing: stay on that row
+                for i, t in enumerate(threads):
+                    if t.id == keep:
+                        lv.index = i
         self.query_one("#sidebar").border_subtitle = str(len(threads))
-        self._mark_current()
         if self.thread_id is not None and all(t.id != self.thread_id for t in threads):
             # Current thread was deleted (possibly from another client).
             self.thread_id = None
@@ -249,16 +289,49 @@ class AnamnesisApp(App[None]):
         self._set_title(thread)
         self._mark_current()  # highlight immediately, before the (slower) message render
         self._cursor = max(self._cursor, await svc.latest_message_id())
-        msgs = await svc.messages(thread.id, limit=MAX_RENDERED_MESSAGES)
+        msgs = await svc.messages(thread.id, limit=PAGE)
         await self.view.remove_children()
         self._displayed = set()
-        if len(msgs) == MAX_RENDERED_MESSAGES:
-            await self._note(f"_Showing the last {MAX_RENDERED_MESSAGES} messages._")
+        self._oldest_shown = msgs[0].id if msgs else None
+        self._has_earlier = len(msgs) == PAGE
+        if self._has_earlier:
+            await self.view.mount(Static("↑ Earlier messages load as you scroll up", id="earlier"))
         await self.view.mount_all(MessageView.from_message(m, thread.source) for m in msgs)
         self._displayed.update(m.id for m in msgs)
         if not msgs:
             self.view.mount(Static("(no messages)", id="empty"))
         self.view.scroll_end(animate=False)
+        self.call_after_refresh(self._fill_view)
+
+    def _fill_view(self) -> None:
+        """Short messages may not fill the panel, so there's nothing to scroll: load more now."""
+        if self._has_earlier and self.view.max_scroll_y == 0:
+            self.run_worker(self._load_earlier(), group="earlier", exclusive=True)
+
+    async def _load_earlier(self) -> None:
+        if self._loading_earlier or not self._has_earlier or self.thread_id is None:
+            return
+        self._loading_earlier = True
+        try:
+            thread_id, source = self.thread_id, self._thread_source
+            msgs = await self.svc.messages(thread_id, limit=PAGE, before=self._oldest_shown)
+            if thread_id != self.thread_id:  # another conversation was opened meanwhile
+                return
+            self._has_earlier = len(msgs) == PAGE
+            anchor = next(iter(self.view.query(MessageView)), None)
+            if msgs and anchor is not None:
+                self._oldest_shown = msgs[0].id
+                views = [MessageView.from_message(m, source) for m in msgs]
+                await self.view.mount_all(views, before=anchor)
+                self._displayed.update(m.id for m in msgs)
+            if not self._has_earlier:
+                for hint in self.view.query("#earlier"):
+                    await hint.remove()
+            if anchor is not None:  # keep the message you were reading in place
+                self.view.scroll_to_widget(anchor, top=True, animate=False)
+        finally:
+            self._loading_earlier = False
+        self.call_after_refresh(self._fill_view)
 
     # ---------- live updates (background imports, other devices, the web UI) ----------
 
