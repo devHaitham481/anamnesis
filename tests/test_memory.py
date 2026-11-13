@@ -389,3 +389,25 @@ def test_claude_cli_never_gets_the_terminal(monkeypatch: pytest.MonkeyPatch) -> 
         connect._claude_code_connect()
     assert seen["stdin"] is subprocess.DEVNULL
     assert str(err.value) == "error: EINVAL: invalid argument, kqueue"  # one line, not a stack
+
+
+def test_claude_code_current_reads_claude_mcp_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from anamnesis import connect
+
+    command, args = connect.server_command()
+    output = {"text": ""}
+
+    def fake_run(cmd: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, output["text"], "")
+
+    monkeypatch.setattr(connect, "_claude_bin", lambda: "/bin/claude")
+    monkeypatch.setattr(connect.subprocess, "run", fake_run)
+    shape = "anamnesis:\n  Scope: User config\n  Status: ✔ Connected\n  Type: stdio\n"
+    output["text"] = shape + f"  Command: {command}\n  Args: {' '.join(args)}\n  Environment:\n"
+    assert connect._claude_code_current()
+    output["text"] = shape + f"  Command: {command}\n  Args: -m src.memory_mcp\n"
+    assert not connect._claude_code_current()
+    output["text"] = shape + "  Command: /old/.venv/bin/python\n  Args: -m anamnesis.memory_mcp\n"
+    assert not connect._claude_code_current()

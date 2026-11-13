@@ -221,8 +221,16 @@ def _claude_code_current() -> bool:
         res = _claude_run("get", SERVER_NAME)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+    if res.returncode != 0:
+        return False
+    # `claude mcp get` prints "Command: <path>" and "Args: <args>" on separate lines.
+    fields = {}
+    for line in res.stdout.splitlines():
+        key, sep, value = line.strip().partition(":")
+        if sep:
+            fields[key.strip().lower()] = value.strip()
     command, args = server_command()
-    return res.returncode == 0 and f"{command} {' '.join(args)}" in " ".join(res.stdout.split())
+    return fields.get("command") == command and fields.get("args") == " ".join(args)
 
 
 def _claude_code_connect() -> str:
