@@ -27,9 +27,9 @@ Your AI tools don't keep your history for long. Claude Code deletes sessions aft
 
 - **Keeps:** every conversation, permanently, even after the tool itself has deleted it.
 - **Collects:** reads the history your AI tools already keep, in the background.
-- **Recalls:** keyword and semantic search, run locally, for every connected agent.
+- **Recalls:** keyword and semantic search, run locally, for every connected agent. A search takes about a tenth of a second.
 - **Remembers:** agents save decisions with `remember`, visible to all your tools.
-- **Stays yours:** local SQLite and a local embedding model. No account, no API keys, no telemetry.
+- **Stays yours:** everything in local SQLite, with a small local embedding model. No account, no API keys, no telemetry.
 
 It is only the memory: it never calls a model, and you keep using the tools you already use.
 
@@ -108,7 +108,7 @@ anam keep                    # stop Claude Code deleting its sessions after 30 d
 
 ### Browse it yourself
 
-`anam` opens the archive in the terminal: every conversation from every tool, and search across all of them.
+`anam` opens the archive in the terminal: every conversation from every tool, and search across all of them. It's keyboard-first with vim keys: `j`/`k` to move, `l` to open, `h` to go back, `Ctrl+D`/`Ctrl+U` to scroll, and `/` to fuzzy-filter your conversations as you type (Enter searches every message).
 
 <p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/search.svg" alt="The Anamnesis terminal UI: conversations from every tool on the left, search results from ChatGPT, Claude Code and a saved note on the right" width="900"></p>
 
@@ -184,7 +184,7 @@ anam mcp                  the MCP server (connected tools start it for you)
 <details>
 <summary>Terminal UI</summary>
 
-Each conversation shows a dot in its tool's color; search results carry the tool's name as a label. Type in the search box at the top.
+Each conversation shows a dot in its tool's color; search results carry the tool's name as a label. Press `/` (or `Ctrl+F`) for the search box at the top: typing filters the list, Enter searches every message.
 
 | Key / command | Action |
 |---|---|
