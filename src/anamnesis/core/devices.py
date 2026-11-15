@@ -37,12 +37,10 @@ import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-from anamnesis.core.memory import MemoryService
+if TYPE_CHECKING:  # imported lazily: `anam status` and friends shouldn't pay for them
+    from anamnesis.core.memory import MemoryService
 from anamnesis.core.models import ImportedConversation, ImportedMessage, Thread
 
 log = logging.getLogger(__name__)
@@ -480,6 +478,8 @@ def list_devices(cfg: SyncConfig) -> list[dict[str, Any]]:
 
 
 def encrypt(key: bytes, device_id: str, records: list[dict[str, Any]]) -> bytes:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     body = gzip.compress("\n".join(json.dumps(r) for r in records).encode())
     nonce = secrets.token_bytes(12)
     return MAGIC + nonce + AESGCM(key).encrypt(nonce, body, device_id.encode())
@@ -488,6 +488,9 @@ def encrypt(key: bytes, device_id: str, records: list[dict[str, Any]]) -> bytes:
 def decrypt(key: bytes, device_id: str, blob: bytes) -> list[dict[str, Any]]:
     if not blob.startswith(MAGIC):
         raise ValueError("not an Anamnesis segment")
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     nonce, ct = blob[4:16], blob[16:]
     try:
         body = AESGCM(key).decrypt(nonce, ct, device_id.encode())

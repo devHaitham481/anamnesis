@@ -148,3 +148,29 @@ def snippet(content: str, terms: list[str], width: int = 220) -> str:
     if start + width < len(text):
         out = out.rstrip() + "…"
     return ("…" if start else "") + out
+
+
+def fuzzy_score(query: str, text: str) -> float | None:
+    """Fuzzy match like fzf: every query character in order. None = no match.
+
+    Several words must each match. Consecutive characters and matches at word starts score
+    higher, so "sess mid" ranks "Add session middleware" above "session ... mid-term".
+    """
+    hay = text.lower()
+    total = 0.0
+    for word in query.lower().split():
+        pos, score, prev = 0, 0.0, -2
+        for ch in word:
+            found = hay.find(ch, pos)
+            if found < 0:
+                return None
+            score += 1.0
+            if found == prev + 1:
+                score += 2.0  # consecutive
+            if found == 0 or not hay[found - 1].isalnum():
+                score += 3.0  # start of a word
+            prev, pos = found, found + 1
+        if word in hay:
+            score += 5.0 * len(word)  # the plain substring beats a scattered match
+        total += score
+    return total

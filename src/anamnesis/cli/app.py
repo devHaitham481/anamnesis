@@ -20,7 +20,16 @@ from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, ListView, Static
 
 from anamnesis.cli.commands import Command, CommandError, help_text, is_command, parse_command
-from anamnesis.cli.look import BLURRED, MUTED, RUST, pill, project_name, relative_time, snippet
+from anamnesis.cli.look import (
+    BLURRED,
+    MUTED,
+    RUST,
+    fuzzy_score,
+    pill,
+    project_name,
+    relative_time,
+    snippet,
+)
 from anamnesis.cli.widgets import (
     MARKDOWN_STYLES,
     THEME,
@@ -77,6 +86,7 @@ class AnamnesisApp(App[None]):
         self._oldest_shown: int | None = None  # id of the oldest rendered message
         self._has_earlier = False
         self._loading_earlier = False
+        self._filter = ""  # fuzzy filter typed in the search box
 
     # ---------- layout ----------
 
@@ -87,12 +97,12 @@ class AnamnesisApp(App[None]):
         with Horizontal(id="body"):
             with Vertical(id="sidebar") as sidebar:
                 sidebar.border_title = "Conversations"
-                yield ListView(id="threads")
+                yield ThreadList(id="threads")
             with Vertical(id="main"):
                 prompt = Input(placeholder="Loading…", id="prompt", disabled=True)
                 prompt.border_title = "Search"
                 yield prompt
-                yield VerticalScroll(id="view")
+                yield ConversationView(id="view")
         yield Footer()
 
     @property
@@ -132,7 +142,7 @@ class AnamnesisApp(App[None]):
     async def _initialize(self) -> None:
         if self.service is None:
             try:
-                self.service = await MemoryService.create(self.settings)
+                self.service = await MemoryService.create(self.settings, defer_index=True)
             except Exception as e:
                 log.exception("startup failed")
                 self.query_one("#status", Static).update(f"Startup failed: {e}")
@@ -223,6 +233,14 @@ class AnamnesisApp(App[None]):
         svc = self.svc
         self._threads_sig = await svc.threads_signature()
         threads = await svc.list_threads()
+        total = len(threads)
+        if self._filter:
+            scored = [(fuzzy_score(self._filter, _haystack(t)), t) for t in threads]
+            ranked = sorted(
+                ((sc, t) for sc, t in scored if sc is not None),
+                key=lambda st: (-st[0], -st[1].updated_at),
+            )
+            threads = [t for _, t in ranked]
         lv = self.query_one("#threads", ListView)
         items = list(lv.query(ThreadItem))
         if [i.thread_id for i in items] == [t.id for t in threads]:
@@ -240,8 +258,14 @@ class AnamnesisApp(App[None]):
                 for i, t in enumerate(threads):
                     if t.id == keep:
                         lv.index = i
-        self.query_one("#sidebar").border_subtitle = str(len(threads))
-        if self.thread_id is not None and all(t.id != self.thread_id for t in threads):
+        self.query_one("#sidebar").border_subtitle = (
+            f"{len(threads)} of {total}" if self._filter else str(total)
+        )
+        if (
+            not self._filter
+            and self.thread_id is not None
+            and all(t.id != self.thread_id for t in threads)
+        ):
             # Current thread was deleted (possibly from another client).
             self.thread_id = None
             self._show_empty()
@@ -352,6 +376,22 @@ class AnamnesisApp(App[None]):
 
     # ---------- input ----------
 
+    @on(Input.Changed, "#prompt")
+    def _typed(self, event: Input.Changed) -> None:
+        """Typing filters the conversation list live (fuzzy, on title, project and tool)."""
+        text = event.value.strip()
+        wanted = "" if text.startswith("/") else text
+        if wanted != self._filter and self.service is not None:
+            self._filter = wanted
+            self._apply_filter()
+
+    @work(exclusive=True, group="filter")
+    async def _apply_filter(self) -> None:
+        await self._refresh_threads()
+        lv = self.query_one("#threads", ListView)
+        if self._filter and len(lv):
+            lv.index = 0
+
     @on(Input.Submitted, "#prompt")
     async def _submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -452,7 +492,74 @@ class AnamnesisApp(App[None]):
         self.query_one("#threads", ListView).focus()
 
     def action_focus_prompt(self) -> None:
-        self.query_one("#prompt", Input).focus()
+        prompt = self.query_one("#prompt", Input)
+        if prompt.has_focus and prompt.value:
+            prompt.value = ""  # Esc in the search box: clear the filter first
+        elif prompt.has_focus:
+            self.action_focus_threads()
+        else:
+            prompt.focus()
+
+    async def action_open_highlighted(self) -> None:
+        """`l` on the list: open the conversation and move into it."""
+        lv = self.query_one("#threads", ListView)
+        item = lv.highlighted_child
+        if isinstance(item, ThreadItem):
+            if item.thread_id != self.thread_id:
+                await self._open_thread(item.thread_id)
+            self.view.focus()
+
+
+def _haystack(thread: Thread) -> str:
+    return " ".join(
+        (thread.title or "", project_name(thread.project), SOURCE_LABELS.get(thread.source, ""))
+    )
+
+
+class ThreadList(ListView):
+    """The conversation list, with vim keys."""
+
+    BINDINGS = [
+        Binding("j", "cursor_down", "Down", show=False),
+        Binding("k", "cursor_up", "Up", show=False),
+        Binding("g", "first", "Top", show=False),
+        Binding("G", "last", "Bottom", show=False),
+        Binding("ctrl+d", "half_page(1)", "Half page down", show=False),
+        Binding("ctrl+u", "half_page(-1)", "Half page up", show=False),
+        Binding("l", "app.open_highlighted", "Open", show=False),
+        Binding("slash", "app.focus_prompt", "Search"),
+    ]
+
+    def action_first(self) -> None:
+        if len(self):
+            self.index = 0
+
+    def action_last(self) -> None:
+        if len(self):
+            self.index = len(self) - 1
+
+    def action_half_page(self, direction: int) -> None:
+        if len(self):
+            rows = max(1, self.size.height // 3 // 2)  # each row is 3 lines tall
+            self.index = max(0, min(len(self) - 1, (self.index or 0) + direction * rows))
+
+
+class ConversationView(VerticalScroll):
+    """The open conversation, with vim scrolling."""
+
+    BINDINGS = [
+        Binding("j", "scroll_down", "Down", show=False),
+        Binding("k", "scroll_up", "Up", show=False),
+        Binding("g", "scroll_home", "Top", show=False),
+        Binding("G", "scroll_end", "Bottom", show=False),
+        Binding("ctrl+d", "half_page(1)", "Half page down", show=False),
+        Binding("ctrl+u", "half_page(-1)", "Half page up", show=False),
+        Binding("h", "app.focus_threads", "Back to list", show=False),
+        Binding("slash", "app.focus_prompt", "Search"),
+    ]
+
+    def action_half_page(self, direction: int) -> None:
+        self.scroll_relative(y=direction * max(1, self.size.height // 2), animate=False)
 
 
 def _subtitle(thread: Thread) -> str:

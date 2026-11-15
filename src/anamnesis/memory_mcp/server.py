@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import datetime as dt
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from typing import Any
@@ -20,8 +19,14 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from anamnesis.config import Settings, load_settings
+from anamnesis.core.formatting import (  # noqa: F401  (format_* re-exported)
+    format_hits,
+    format_threads,
+)
+from anamnesis.core.formatting import label as _label
+from anamnesis.core.formatting import snippet as _snippet
+from anamnesis.core.formatting import when as _when
 from anamnesis.core.memory import MemoryService
-from anamnesis.core.models import SOURCE_LABELS, SearchHit, Thread
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +43,6 @@ Anamnesis is the user's complete archive of past conversations across all their 
 - Results come from other sessions and may be outdated; prefer the current repo state if they
   conflict."""
 
-SNIPPET_CHARS = 700
-
-
 _state: dict[str, Any] = {}
 
 
@@ -49,45 +51,6 @@ def _service() -> MemoryService:
     if service is None:
         raise RuntimeError("Anamnesis memory is still starting up; try again in a moment.")
     return service  # type: ignore[no-any-return]
-
-
-def _when(ts: float | None) -> str:
-    if not ts:
-        return "unknown date"
-    return dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
-
-
-def _label(source: str | None) -> str:
-    return SOURCE_LABELS.get(source or "", source or "unknown")
-
-
-def _snippet(text: str, limit: int = SNIPPET_CHARS) -> str:
-    text = text.strip()
-    return text if len(text) <= limit else text[:limit].rstrip() + " …"
-
-
-def format_hits(hits: list[SearchHit]) -> str:
-    if not hits:
-        return "No matching memories."
-    out = []
-    for i, h in enumerate(hits, 1):
-        where = f" · {h.project}" if h.project else ""
-        out.append(
-            f"[{i}] {_label(h.source)}{where} · {_when(h.created_at)} · "
-            f'"{h.thread_title or "Untitled"}" (thread {h.thread_id})\n'
-            f"{h.role}: {_snippet(h.content)}"
-        )
-    return "\n\n".join(out)
-
-
-def format_threads(threads: list[Thread]) -> str:
-    if not threads:
-        return "No conversations stored yet."
-    return "\n".join(
-        f"- {t.id} · {_label(t.source)} · {_when(t.updated_at)} · {t.title}"
-        + (f" · {t.project}" if t.project else "")
-        for t in threads
-    )
 
 
 # Called for every tool call with (tool, detail); the node uses it for its activity log.
@@ -133,7 +96,7 @@ def build_server(
     @contextlib.asynccontextmanager
     async def lifespan(_: MCPServer[Any]) -> AsyncIterator[None]:
         own = service is None
-        svc = service or await MemoryService.create(settings or load_settings())
+        svc = service or await MemoryService.create(settings or load_settings(), defer_index=True)
         _state["service"] = svc
         # The node keeps its own activity log; locally, lookups are counted in the database.
         _state["activity"] = activity or svc.record_lookup
@@ -179,7 +142,7 @@ def build_server(
         up, so you build on what was already worked out instead of starting from scratch.
 
         Args:
-            query: What to look for, in natural language (e.g. "why we chose LanceDB").
+            query: What to look for, in natural language (e.g. "why we chose Postgres").
             limit: Maximum number of results (1-25).
             source: Only one tool: claude-code, codex, gemini-cli, cursor, chatgpt,
                 claude-web, gemini-web, anamnesis or note.

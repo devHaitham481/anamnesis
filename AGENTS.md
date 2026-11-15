@@ -10,7 +10,7 @@
 ### Memory & Ingestion Specialist
 
 - **Focus Directory:** `src/anamnesis/core`, `src/anamnesis/ingest`, `src/anamnesis/memory_mcp`
-- **Responsibility:** Implements SQLite schemas, LanceDB retrieval, importers for each AI tool, cross-device sync and the MCP server.
+- **Responsibility:** Implements SQLite schemas, vector retrieval (SQLite + numpy), importers for each AI tool, cross-device sync and the MCP server.
 
 ### Interface Developer (TUI & Web)
 

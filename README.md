@@ -191,6 +191,10 @@ Each conversation shows a dot in its tool's color; search results carry the tool
 | *text* or `/search <query>`, `/open N` | Search all memory, open a result |
 | `/history [source]` | Recent conversations, e.g. `/history chatgpt` |
 | `/sync` | Import new history now |
+| `j` `k` · `g` `G` · `Ctrl+D` `Ctrl+U` | Move or scroll (list and conversation) |
+| `l` / `h` | Open the highlighted conversation / back to the list |
+| `/` | Search box: typing fuzzy-filters the list, Enter searches every message |
+| `Esc` | Clear the search box, then back to the list |
 | `Ctrl+L` / `Ctrl+F` | Focus the conversation list / the search box |
 | `/rename`, `/delete` (twice), `/help`, `Ctrl+Q` | Manage, help, quit |
 </details>

@@ -33,10 +33,11 @@ def _log_to_file(settings: Settings, name: str = "anamnesis.log") -> None:
     )
 
 
-async def _with_service(settings: Settings, fn):  # type: ignore[no-untyped-def]
+async def _with_service(settings: Settings, fn, quiet: bool = False):  # type: ignore[no-untyped-def]
     from anamnesis.core.memory import MemoryService
 
-    print("Opening memory…", file=sys.stderr, flush=True)
+    if not quiet:
+        print("Opening memory…", file=sys.stderr, flush=True)
     service = await MemoryService.create(settings)
     try:
         return await fn(service)
@@ -132,13 +133,46 @@ def cmd_import(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
-    from anamnesis.memory_mcp.server import format_hits
+    from rich.padding import Padding
+    from rich.text import Text
+
+    from anamnesis.cli import look
+    from anamnesis.core.models import SOURCE_LABELS, SearchHit
+
+    query = " ".join(args.query)
 
     async def run(service):  # type: ignore[no-untyped-def]
-        hits = await service.search(" ".join(args.query), k=args.limit, source=args.source)
-        print(format_hits(hits))
+        return await service.search(query, k=args.limit * 3, source=args.source)
 
-    asyncio.run(_with_service(settings, run))
+    best: dict[str, SearchHit] = {}  # one result per conversation: its best message
+    for h in asyncio.run(_with_service(settings, run, quiet=True)):
+        best.setdefault(h.thread_id, h)
+    hits = list(best.values())[: args.limit]
+    con = look.console()
+    if not hits:
+        con.print(Text(f"No matches for “{query}”.", style=look.MUTED))
+        return 0
+    terms = look.query_terms(query)
+    con.print()
+    for i, h in enumerate(hits, 1):
+        where = " · ".join(
+            p
+            for p in (
+                look.project_name(h.project),
+                look.relative_time(h.created_at) if h.created_at else "",
+            )
+            if p
+        )
+        con.print(Text.assemble((f"{i:>2}  ", look.MUTED), (h.thread_title or "Untitled", "bold")))
+        tool = SOURCE_LABELS.get(h.source or "", h.source or "")
+        con.print(
+            Text.assemble(
+                "    ", look.pill(tool, look.source_color(h.source)), (f"  {where}", look.MUTED)
+            )
+        )
+        body = Text(look.snippet(h.content, terms))
+        body.highlight_words(terms, style=f"bold {look.RUST}", case_sensitive=False)
+        con.print(Padding(body, (0, 2, 1, 4)), soft_wrap=False)
     return 0
 
 

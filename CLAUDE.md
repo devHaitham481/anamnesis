@@ -4,7 +4,7 @@
 
 - **Language:** Python 3.11+ (or Node.js 20+ TypeScript — check root setup)
 - **Purpose:** a single-purpose local memory shared by all AI tools (MCP server + importers). It is not a chat client and never calls a model.
-- **Database:** SQLite + LanceDB (Vector)
+- **Database:** SQLite (messages, FTS5 keyword search, and embeddings searched with numpy)
 - **TUI Framework:** `Textual`
 - **Backend API:** `FastAPI` + WebSockets (memory browser)
 - **Execution Style:** Local-first, modular, fully typed, heavily tested.

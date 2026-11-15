@@ -188,3 +188,23 @@ Why: the research showed "memory for agents" is crowded (claude-mem, agentmemory
 ## 2026-11-15 — `anam status` in under a second
 
 `anam status` took 7.7 s: checking Claude Code ran `claude mcp get` twice, about 2.9 s each (the Bun CLI starts and health-checks the server). The entry is now read straight from `~/.claude.json` (`CLAUDE_CONFIG_DIR` honored), with the CLI kept as a fallback when that file can't be read. Now 0.76 s; `anam setup` and `anam connect` get faster too.
+
+## 2026-11-15 — Speed pass, and vim keys in the TUI
+
+Measured on a real memory (60 conversations, 7,000 messages), warm:
+
+| | Before | After |
+|---|---|---|
+| `anam search` | 1.9 s (5.2 s cold) | 0.16–0.28 s |
+| `anam status` | 7.7 s | 0.25 s |
+| `anam devices` / `connect` | 0.54 / 0.22 s | 0.19 / 0.13 s |
+| MCP server ready | 0.91 s | 0.55 s |
+| MCP first search | 0.30 s | 0.11 s (then ~0.03 s) |
+| TUI ready, conversation shown | | 0.24 s after import (0.39 s, mostly Textual) |
+
+- **No LanceDB, pyarrow or fastembed.** Their imports alone cost ~1.3 s per command. Vectors now live in `vectors/embeddings.db` (SQLite) and are searched by brute-force cosine in numpy, with an in-memory matrix reloaded only when the table changes. The embedder runs the same ONNX model directly with onnxruntime + tokenizers (identical vectors: max difference 0.0 against fastembed) and embeds texts of similar length together. The old LanceDB index is removed and messages are re-embedded once in the background (about 4.5 min for 6,800 messages).
+- **Long-running processes start at once:** the MCP server and the TUI load the model in the background (warmed up); anything needing it waits.
+- **Light imports:** `anam search` no longer imports the MCP SDK (formatting moved to `core/formatting.py`); `core/devices.py` loads cryptography and MemoryService only when syncing; Claude Code's MCP entry is read from `~/.claude.json`.
+- **`anam search`:** one result per conversation, styled like the TUI.
+- **TUI vim keys:** `j`/`k`, `g`/`G`, `Ctrl+D`/`Ctrl+U` in the list and the conversation; `l` opens, `h` goes back; `/` jumps to the search box, where typing fuzzy-filters the list (fzf-style, on title, project and tool) and Enter searches every message; `Esc` clears, then returns to the list.
+- **Tests:** +3 (vim keys, fuzzy filter, fuzzy ranking); 114 pass.

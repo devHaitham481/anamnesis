@@ -187,3 +187,89 @@ async def test_background_updates_keep_the_list_and_your_cursor(service: MemoryS
         items = list(app.query(ThreadItem))
         assert [i.thread_id for i in items] == [b.id, c.id, a.id]
         assert items[lv.index or 0].thread_id == a.id
+
+
+async def test_vim_keys_move_open_and_scroll(service: MemoryService) -> None:
+    long = [f"line {i} " + "word " * 40 for i in range(30)]
+    t1, _ = await service.import_conversation(conversation("a", *long, title="Long", start=3_000))
+    await service.import_conversation(conversation("b", "two", title="Two", start=2_000))
+    t3, _ = await service.import_conversation(
+        conversation("c", "three", title="Three", start=1_000)
+    )
+    app = AnamnesisApp(service.settings, service)
+    async with app.run_test(size=(120, 30)) as pilot:
+        await wait_until(pilot, lambda: ready(app) and app.thread_id == t1.id)
+        lv = app.query_one("#threads", ListView)
+        lv.focus()
+        lv.index = 0
+        await pilot.press("j", "j")
+        assert lv.index == 2
+        await pilot.press("k")
+        assert lv.index == 1
+        await pilot.press("G")
+        assert lv.index == 2
+        await pilot.press("l")  # open it and move into the conversation
+        await wait_until(pilot, lambda: app.thread_id == t3.id)
+        assert app.view.has_focus
+        await pilot.press("h")
+        assert lv.has_focus
+        await pilot.press("g", "l")
+        await wait_until(pilot, lambda: app.thread_id == t1.id and len(views(app)) >= 30)
+        view = app.view
+        await pilot.pause()
+        view.scroll_home(animate=False)
+        await pilot.pause()
+        await pilot.press("ctrl+d")
+        await pilot.pause()
+        assert view.scroll_y > 0
+        down = view.scroll_y
+        await pilot.press("j")
+        await pilot.pause()
+        assert view.scroll_y > down
+        await pilot.press("ctrl+u", "ctrl+u")
+        await pilot.pause()
+        assert view.scroll_y == 0
+        await pilot.press("slash")  # vim search: jump to the search box
+        assert app.query_one("#prompt", Input).has_focus
+
+
+async def test_typing_fuzzy_filters_the_list(service: MemoryService) -> None:
+    await service.import_conversation(
+        conversation("a", "x", title="Add session middleware", project="/w/api", start=3_000)
+    )
+    await service.import_conversation(conversation("b", "y", title="Pasta recipe", start=2_000))
+    await service.import_conversation(
+        conversation("c", "z", title="Session timeout bug", source="codex", start=1_000)
+    )
+    app = AnamnesisApp(service.settings, service)
+    async with app.run_test(size=(120, 30)) as pilot:
+        await wait_until(pilot, lambda: ready(app) and len(app.query(ThreadItem)) == 3)
+        app.query_one("#prompt", Input).focus()
+        await pilot.press(*"sess mid")
+
+        def titles() -> list[str]:
+            return [i._title for i in app.query(ThreadItem)]
+
+        await wait_until(pilot, lambda: titles() == ["Add session middleware"])
+        assert app.query_one("#sidebar").border_subtitle == "1 of 3"
+        app.query_one("#prompt", Input).value = "sesion"  # typo-tolerant: letters in order
+        await wait_until(pilot, lambda: len(titles()) == 2)
+        app.query_one("#prompt", Input).value = "/help"  # commands don't filter
+        await wait_until(pilot, lambda: len(titles()) == 3)
+        app.query_one("#prompt", Input).value = "codex"  # tool names match too
+        await wait_until(pilot, lambda: titles() == ["Session timeout bug"])
+        await pilot.press("escape")  # clears the filter
+        await wait_until(pilot, lambda: len(titles()) == 3)
+        await pilot.press("escape")  # then back to the list
+        assert app.query_one("#threads", ListView).has_focus
+
+
+def test_fuzzy_score_ranks_closer_matches_higher() -> None:
+    from anamnesis.cli.look import fuzzy_score
+
+    assert fuzzy_score("xyz", "Add session middleware") is None
+    exact = fuzzy_score("session", "Add session middleware")
+    scattered = fuzzy_score("session", "Some essential inspection notes")
+    assert exact is not None and scattered is not None and exact > scattered
+    assert fuzzy_score("sess mid", "Add session middleware") is not None
+    assert fuzzy_score("sess xyz", "Add session middleware") is None

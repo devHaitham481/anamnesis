@@ -1,4 +1,4 @@
-"""Shared fixtures: an isolated MemoryService backed by tmp SQLite/LanceDB (hash embeddings)."""
+"""Shared fixtures: an isolated MemoryService backed by tmp SQLite (hash embeddings)."""
 
 from __future__ import annotations
 

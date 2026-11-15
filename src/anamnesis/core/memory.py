@@ -7,6 +7,7 @@ tools, saving notes, keyword + semantic search, and browsing stored threads.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -21,7 +22,7 @@ from anamnesis.core.models import (
     SearchHit,
     Thread,
 )
-from anamnesis.core.vector import FastEmbedEmbedder, VectorIndex
+from anamnesis.core.vector import OnnxEmbedder, VectorIndex
 
 log = logging.getLogger(__name__)
 
@@ -40,30 +41,51 @@ class MemoryService:
         self.db = db
         self.index = index
         self.settings = settings
+        self._index_task: asyncio.Task[None] | None = None
 
     # ---------- lifecycle ----------
 
     @classmethod
-    async def create(cls, settings: Settings) -> MemoryService:
+    async def create(cls, settings: Settings, *, defer_index: bool = False) -> MemoryService:
         """Open the database and (best-effort) the vector index from settings.
 
-        Missing embeddings are filled in by the background memory sync (`ingest.runner.watch`)
-        rather than here, so startup never waits on a large backlog.
+        With `defer_index`, the embedding model loads in the background (long-running
+        processes: the MCP server, the TUI) so they answer at once; anything that needs the
+        index waits for it. Missing embeddings are filled in by the background memory sync
+        (`ingest.runner.watch`), so startup never waits on a large backlog.
         """
         db = await Database(settings.db_path).open()
-        index: VectorIndex | None = None
+        service = cls(db, None, settings)
         if settings.semantic_search:
-            try:
-                embedder = await asyncio.to_thread(
-                    FastEmbedEmbedder, settings.embedding_model, settings.data_dir / "models"
-                )
-                index = await asyncio.to_thread(VectorIndex, settings.vector_path, embedder)
-            except Exception as e:  # offline first run, corrupted cache, ...
-                log.warning("Semantic memory disabled (embedder unavailable): %s", e)
-        return cls(db, index, settings)
+            if defer_index:
+                service._index_task = asyncio.create_task(service._open_index())
+            else:
+                await service._open_index()
+        return service
+
+    async def _open_index(self) -> None:
+        settings = self.settings
+        try:
+            embedder = await asyncio.to_thread(
+                OnnxEmbedder, settings.embedding_model, settings.data_dir / "models"
+            )
+            index = await asyncio.to_thread(VectorIndex, settings.vector_path, embedder)
+            await asyncio.to_thread(index.warm)
+            self.index = index
+        except Exception as e:  # offline first run, corrupted cache, ...
+            log.warning("Semantic memory disabled (embedder unavailable): %s", e)
+
+    async def _index_ready(self) -> None:
+        if self._index_task is not None:
+            await asyncio.shield(self._index_task)
 
     async def close(self) -> None:
+        if self._index_task is not None:
+            with contextlib.suppress(BaseException):
+                await self._index_task
         await self.db.close()
+        if self.index is not None:
+            self.index.close()
 
     async def backfill_index(
         self, batch: int = 64, progress: Callable[[int, int], None] | None = None
@@ -73,6 +95,7 @@ class MemoryService:
         Runs in small batches so a large first import never blocks other work for long and
         progress can be reported. Returns how many messages were indexed.
         """
+        await self._index_ready()
         if self.index is None:
             return 0
         index = self.index
@@ -113,6 +136,7 @@ class MemoryService:
 
     async def delete_thread(self, thread_id: str) -> None:
         await self.db.delete_thread(thread_id)
+        await self._index_ready()
         if self.index is not None:
             try:
                 await asyncio.to_thread(self.index.delete_thread, thread_id)
@@ -122,6 +146,7 @@ class MemoryService:
     async def wipe(self) -> None:
         """Forget everything (a node being reset). Irreversible."""
         await self.db.wipe()
+        await self._index_ready()
         if self.index is not None:
             await asyncio.to_thread(self.index.clear)
 
@@ -156,6 +181,7 @@ class MemoryService:
         """
         filtered = bool(source or project)
         hits: dict[int, SearchHit] = {}
+        await self._index_ready()
         if self.index is not None:
             try:
                 # Oversample when filtering: the vector store doesn't know thread metadata.
@@ -244,6 +270,7 @@ class MemoryService:
 
     async def _index(self, messages: list[Message]) -> None:
         messages = [m for m in messages if _indexable(m)]
+        await self._index_ready()
         if self.index is None or not messages:
             return
         try:

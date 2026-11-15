@@ -49,5 +49,9 @@ def parse_command(text: str) -> Command:
 
 def help_text() -> str:
     rows = "\n".join(f"- `/{n}` — {d.split(' — ')[-1]}" for n, d in COMMANDS.items())
-    keys = "**Keys:** `Ctrl+L` conversation list · `Ctrl+F` / `Esc` search box · `Ctrl+Q` quit"
+    keys = (
+        "**Keys:** `j`/`k` move · `g`/`G` top/bottom · `Ctrl+D`/`Ctrl+U` half page · "
+        "`l` open · `h` back to the list · `/` search (typing filters the list; Enter searches "
+        "everything) · `Esc` clear, then back · `Ctrl+Q` quit"
+    )
     return f"**Commands**\n\n{rows}\n\n{keys}"
