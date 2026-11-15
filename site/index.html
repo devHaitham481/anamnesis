@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anamnesis — one memory for all your AI tools</title>
-<meta name="description" content="Open-source, self-hosted memory shared by Claude Code, Codex, Cursor, Gemini CLI, claude.ai and ChatGPT. Every agent can search what you worked out in any of them.">
+<title>Anamnesis — never lose an AI conversation again</title>
+<meta name="description" content="A permanent, private archive of every conversation with Claude Code, Codex, Cursor, Gemini CLI, claude.ai and ChatGPT, searchable by all of them. Open source, local, no account.">
 <meta property="og:title" content="Anamnesis — one memory for all your AI tools">
-<meta property="og:description" content="Open-source, self-hosted memory shared by every AI tool you use.">
+<meta property="og:description" content="Every conversation with every AI tool, kept on your computer and searchable by all of them.">
 <link rel="canonical" href="https://devhaitham481.github.io/anamnesis/">
 <meta property="og:url" content="https://devhaitham481.github.io/anamnesis/">
 <meta name="theme-color" content="#faf9f6">
@@ -187,8 +187,8 @@
   <section class="hero">
     <div class="wrap">
       <div>
-        <h1>One memory for all your AI tools.</h1>
-        <p class="lede">What you worked out in ChatGPT, Claude Code already knows. Anamnesis collects your conversations from every AI tool into one private memory that all of them can search.</p>
+        <h1>Never lose an AI conversation again.</h1>
+        <p class="lede">Claude Code deletes your sessions after 30 days, and web chats stay locked in their apps. Anamnesis keeps every conversation from every AI tool in one private archive on your computer, and all of them can search it.</p>
         <div class="cmd">
           <pre><code><span class="l">curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh</span></code></pre>
           <button class="copy">Copy</button>
@@ -197,8 +197,9 @@
       </div>
       <div class="term" aria-label="Example: Claude Code recalling a decision made in ChatGPT">
         <div class="bar"><i></i><i></i><i></i></div>
-<pre><span class="p">$</span> anam sync
-<span class="a">✓</span> 4 tools · 212 conversations · 18,406 messages
+<pre><span class="p">$</span> anam status
+<span class="a">✓</span> 212 conversations since Jan 2025 · 4 tools
+  <span class="d">kept 38 sessions Claude Code has deleted</span>
 
 <span class="p">$</span> claude
 <span class="p">&gt;</span> <span class="q">why did we pick session cookies over JWT?</span>

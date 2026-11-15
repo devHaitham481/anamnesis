@@ -49,6 +49,13 @@ CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
     INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
 END;
+-- Each time an agent used the memory over MCP (shown in `anam status`).
+CREATE TABLE IF NOT EXISTS lookups (
+    ts     REAL NOT NULL,
+    tool   TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_lookups_ts ON lookups(ts);
 CREATE TABLE IF NOT EXISTS ingest_state (
     path       TEXT PRIMARY KEY,
     signature  TEXT NOT NULL,
@@ -216,6 +223,40 @@ class Database:
             "SELECT source, COUNT(*) AS n FROM threads GROUP BY source ORDER BY n DESC"
         )
         return {r["source"]: int(r["n"]) for r in rows}
+
+    async def archive_summary(self, since: float) -> dict[str, Any]:
+        """Conversations holding messages, per source, and how many were active since `since`."""
+        rows = await self._fetchall(
+            """SELECT t.source AS source, COUNT(*) AS n,
+                      SUM(CASE WHEN m.last >= ? THEN 1 ELSE 0 END) AS recent
+               FROM threads t
+               JOIN (SELECT thread_id, MAX(created_at) AS last FROM messages GROUP BY thread_id) m
+                 ON m.thread_id = t.id
+               GROUP BY t.source ORDER BY n DESC""",
+            (since,),
+        )
+        first = await self._fetchall("SELECT MIN(created_at) AS first, COUNT(*) AS n FROM messages")
+        return {
+            "sources": {r["source"]: (int(r["n"]), int(r["recent"] or 0)) for r in rows},
+            "first": first[0]["first"],
+            "messages": int(first[0]["n"]),
+        }
+
+    async def ingested_paths(self) -> list[str]:
+        """Keys of imported files: "<source>:<path>"."""
+        rows = await self._fetchall("SELECT path FROM ingest_state")
+        return [r["path"] for r in rows]
+
+    async def record_lookup(self, tool: str, detail: str = "") -> None:
+        async with self._write() as conn:
+            await conn.execute(
+                "INSERT INTO lookups (ts, tool, detail) VALUES (?, ?, ?)",
+                (time.time(), tool, detail[:200]),
+            )
+
+    async def lookup_count(self, since: float) -> int:
+        rows = await self._fetchall("SELECT COUNT(*) AS n FROM lookups WHERE ts >= ?", (since,))
+        return int(rows[0]["n"])
 
     async def update_thread(self, thread_id: str, *, title: str | None = None) -> Thread:
         thread = await self.get_thread(thread_id)
@@ -499,6 +540,7 @@ class Database:
             await conn.execute("DELETE FROM messages")
             await conn.execute("DELETE FROM threads")
             await conn.execute("DELETE FROM ingest_state")
+            await conn.execute("DELETE FROM lookups")
 
 
 def _thread_filter(source: str | None, project: str | None) -> tuple[str, tuple[str, ...]]:

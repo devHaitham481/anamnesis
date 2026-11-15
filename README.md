@@ -1,6 +1,6 @@
 <h1 align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/logo.svg" alt="Anamnesis" width="380"></h1>
 
-<p align="center"><b>One memory for all your AI tools.</b><br>What you worked out in ChatGPT, Claude Code already knows.</p>
+<p align="center"><b>Never lose an AI conversation again.</b><br>Every conversation with every AI tool, kept on your computer and searchable by all of them.</p>
 
 <p align="center">
   <a href="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml/badge.svg"></a>
@@ -23,8 +23,9 @@
 
 <p align="center"><sub>The terminal UI (<code>anam</code>), with sample data.</sub></p>
 
-Anamnesis collects your conversations from **Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini** into one memory on your computer, and gives it back to every AI tool over [MCP](https://modelcontextprotocol.io). Ask Claude Code "what did we decide about auth?" and it finds the answer, even if you worked it out in ChatGPT.
+Your AI tools don't keep your history for long. Claude Code deletes sessions after 30 days, and web chats stay locked inside their apps. Anamnesis keeps a permanent, word-for-word archive of your conversations from **Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini** on your computer, and gives it back to every AI tool over [MCP](https://modelcontextprotocol.io). Ask Claude Code "what did we decide about auth?" and it finds the answer, even if you worked it out in ChatGPT months ago.
 
+- **Keeps:** every conversation, permanently, even after the tool itself has deleted it.
 - **Collects:** reads the history your AI tools already keep, in the background.
 - **Recalls:** keyword and semantic search, run locally, for every connected agent.
 - **Remembers:** agents save decisions with `remember`, visible to all your tools.
@@ -43,8 +44,10 @@ curl -LsSf https://devhaitham481.github.io/anamnesis/install.sh | sh
 The [script](https://devhaitham481.github.io/anamnesis/install.sh) installs [uv](https://docs.astral.sh/uv/) if needed, then Anamnesis in its own environment, with its own Python (nothing to preinstall; your system Python is never touched). Then it runs `anam setup`, which:
 
 1. finds the AI tools on your computer,
-2. imports their history (the first run downloads a 70 MB search model),
-3. asks, then connects them (each config is backed up first).
+2. archives their history (the first run downloads a 70 MB search model),
+3. offers to stop Claude Code deleting old sessions,
+4. asks, then connects them (each config is backed up first),
+5. shows what's archived and how to add your web chats.
 
 **Then restart your AI tools.** That's it.
 
@@ -92,7 +95,8 @@ Just keep working. While any connected tool is running, new conversations sync i
 anam                         # browse and search everything in the terminal
 anam search "auth decision"  # search from the shell
 anam import chatgpt.zip      # add a ChatGPT, claude.ai or Gemini data export
-anam status                  # what's stored, and which tools are connected
+anam status                  # your archive: what's kept per tool, what's missing
+anam keep                    # stop Claude Code deleting its sessions after 30 days
 ```
 
 | Tool | How | Read from |
@@ -102,7 +106,7 @@ anam status                  # what's stored, and which tools are connected
 | claude.ai / Claude Desktop | `anam import <export.zip>` | Settings → Privacy → Export data |
 | Gemini (web) | `anam import <takeout.zip>` | Google Takeout → My Activity → *Gemini Apps*, format **JSON** |
 
-Only what you and the assistant *said* is kept: tool calls and output, reasoning, and injected system context are skipped. Re-importing is safe.
+`anam status` shows the archive, what it has kept after a tool deleted it, how often your agents used it this week, and which web chats you haven't imported yet. Only what you and the assistant *said* is kept: tool calls and output, reasoning, and injected system context are skipped. Re-importing is safe.
 
 ## In claude.ai, ChatGPT and on your phone
 
@@ -160,7 +164,8 @@ anam import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
 anam search QUERY         search everything from the shell  [--source chatgpt]
 anam connect [TOOL|all]   claude-code, claude-desktop, cursor, gemini-cli, codex
 anam disconnect TOOL|all
-anam status               what is stored per tool, sync state, connected tools
+anam status               your archive per tool, what's missing, sync state, connected tools
+anam keep                 stop Claude Code deleting its sessions after 30 days
 anam share | join | devices | unshare     sync computers through a folder
 anam node deploy fly      create your node on Fly.io (or use docker-compose.yml)
 anam node link URL        sync this computer through your node

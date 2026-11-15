@@ -76,3 +76,16 @@ Goal: someone who has never heard of Anamnesis goes from the website to a workin
 - [x] CI (lint, types, tests on 3.11 and 3.13); README and website install guides.
 - [x] PyPI name `anamnesis-cli`, package metadata, release workflow (trusted publishing on `v*` tags).
 - [ ] First PyPI release: add the pending publisher on pypi.org, then tag `v0.1.0`; then point `install.sh` at PyPI.
+
+### Sprint 9: The Archive
+
+Goal: lead with a concrete promise, "never lose an AI conversation again", and show that it holds.
+
+- [x] `anam status` leads with the archive: conversations and messages per tool, activity this week, sessions kept after the tool deleted them, and which web-chat exports are missing (with where to get them).
+- [x] Claude Code's 30-day deletion: detected; `anam setup` asks to turn it off, `anam keep` does it later (merged into `~/.claude/settings.json`, `.bak` kept).
+- [x] Agent lookups over local MCP are counted (`lookups` table) and shown in `anam status`, to see whether agents actually use the memory.
+- [x] Sharper MCP instructions: search before answering when a project, ticket, system or earlier decision comes up.
+- [x] Setup ends with the archive and export guidance; `anam import -h` lists where each export lives.
+- [x] README and website lead with the archive.
+- [ ] Measure for a week: agent lookups per week before and after the sharper instructions.
+- [ ] Claude Code plugin (instructions + SessionStart/SessionEnd hooks), then the browser extension for live web chats.

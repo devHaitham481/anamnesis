@@ -1,9 +1,10 @@
 """`anam setup`: the guided first run (and safe to re-run after every upgrade).
 
 1. find the AI tools on this computer,
-2. import their history,
-3. connect them to the memory (asks first), repairing entries left by an older install,
-4. say what to do next.
+2. archive their history,
+3. offer to stop Claude Code deleting its own sessions (asks first),
+4. connect the tools to the memory (asks first), repairing entries left by an older install,
+5. show what is archived, how to add web chats, and what to do next.
 """
 
 from __future__ import annotations
@@ -34,8 +35,14 @@ def _heading(n: int, text: str) -> None:
 
 
 def run(settings: Settings, args: argparse.Namespace) -> int:
+    from anamnesis.cli import archive_view
     from anamnesis.cli.__main__ import cmd_sync
     from anamnesis.connect import targets
+    from anamnesis.retention import (
+        claude_code_cleanup_days,
+        deletes_history,
+        keep_claude_code_history,
+    )
 
     if hasattr(sys.stdout, "reconfigure"):  # keep step output in order when piped (curl | sh)
         sys.stdout.reconfigure(line_buffering=True)
@@ -52,7 +59,7 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         print("   None of the supported tools were found. You can still import ChatGPT,")
         print("   claude.ai or Gemini exports later with `anam import <file>`.")
 
-    _heading(2, "Importing your history")
+    _heading(2, "Archiving your history")
     if args.skip_import:
         print("   skipped (--skip-import)")
     else:
@@ -62,7 +69,25 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
         if code != 0:
             print("   Import did not finish; run `anam sync` to try again.", file=sys.stderr)
 
-    _heading(3, "Connecting your AI tools")
+    _heading(3, "Keeping your history")
+    days = claude_code_cleanup_days()
+    if deletes_history(days):
+        print(f"   Claude Code deletes conversations after {days} days. Anamnesis keeps its own")
+        print("   copy either way; turning the deletion off keeps them resumable in Claude Code.")
+        answer = _ask("   Stop Claude Code deleting old conversations?", args.yes)
+        if answer is None:
+            print("   No terminal to ask in. Run `anam keep` to do it later.")
+        elif not answer:
+            print("   Left as is. Change your mind with `anam keep`.")
+        else:
+            try:
+                print(f"   ✓ Claude Code      {keep_claude_code_history()}")
+            except ValueError as e:
+                print(f"   ✗ Claude Code      {e}", file=sys.stderr)
+    else:
+        print("   Nothing to change: Anamnesis keeps everything it archives, permanently.")
+
+    _heading(4, "Connecting your AI tools")
     todo = [t for t in found if not t.current()]
     connected = [t for t in found if t not in todo]
     for t in connected:
@@ -86,8 +111,15 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
     elif not found:
         print("   Nothing to connect.")
 
-    print("\nDone.\n")
-    print("Next:")
+    archive = archive_view.load(settings)
+    print("\nDone. Your archive:\n")
+    archive_view.print_archive(settings, archive, indent="   ", retention=False)
+    missing = archive_view.missing_exports(archive)
+    if missing:
+        print("\nAdd your web chats (they live on the providers' servers, so export them once):")
+        archive_view.print_exports(missing, indent="   ")
+
+    print("\nNext:")
     if connected:
         names = ", ".join(t.label for t in connected)
         print(f"  • Restart {names} (or open a new session) so they load the memory.")

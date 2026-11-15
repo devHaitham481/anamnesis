@@ -101,6 +101,10 @@ class MemoryService:
     async def source_counts(self) -> dict[str, int]:
         return await self.db.source_counts()
 
+    async def record_lookup(self, tool: str, detail: str = "") -> None:
+        """Log that an agent used the memory (counted in `anam status`)."""
+        await self.db.record_lookup(tool, detail)
+
     async def get_thread(self, thread_id: str) -> Thread:
         return await self.db.get_thread(thread_id)
 

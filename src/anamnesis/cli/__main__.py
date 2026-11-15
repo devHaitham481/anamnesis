@@ -7,7 +7,8 @@ anam import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data e
 anam search QUERY         search all memory from the shell
 anam connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = show status
 anam disconnect TOOL|all
-anam status               what is stored, per source
+anam status               your archive: what is kept, per tool, and what's missing
+anam keep                 stop Claude Code deleting its own sessions after 30 days
 anam mcp                  run the MCP server (started for you by connected tools)
 anam node …               your self-hosted node: deploy, link, status, activity, revoke, wipe
 """
@@ -66,6 +67,17 @@ def _print_report(report) -> None:  # type: ignore[no-untyped-def]
 def _progress(done: int, total: int) -> None:
     end = "\n" if done >= total else ""
     print(f"\rEmbedding for semantic search: {done}/{total}", end=end, flush=True)
+
+
+_EXPORT_HELP = """where to get an export:
+  claude.ai   Settings → Privacy → Export data   (also covers Claude Desktop and the app)
+              https://claude.ai/settings/data-privacy-controls
+  ChatGPT     Settings → Data controls → Export data
+              https://chatgpt.com/#settings/DataControls
+  Gemini      Google Takeout → only "My Activity" → "Gemini Apps", format JSON
+              https://takeout.google.com
+
+The download link arrives by email. Importing a newer export later only adds what's new."""
 
 
 def cmd_sync(settings: Settings, args: argparse.Namespace) -> int:
@@ -131,25 +143,37 @@ def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
-    from anamnesis.core.db import Database
-    from anamnesis.core.models import SOURCE_LABELS
+    from anamnesis.cli import archive_view
 
-    async def run() -> None:
-        async with Database(settings.db_path) as db:
-            counts = await db.source_counts()
-            total = await db.max_message_id()
-        print(f"Memory: {settings.data_dir}")
-        if not counts:
-            print("  (empty) run `anam setup` to import your AI tools' history")
-        for source, n in counts.items():
-            print(f"  {SOURCE_LABELS.get(source, source):<22} {n:>5} conversations")
-        print(f"  {'messages (total)':<22} {total:>5}")
-
-    asyncio.run(run())
+    archive = archive_view.load(settings)
+    print(f"Archive: {settings.data_dir}")
+    archive_view.print_archive(settings, archive)
+    if archive.conversations:
+        print()
+        archive_view.print_lookups(archive)
+    missing = archive_view.missing_exports(archive)
+    if missing:
+        print("\nNot imported yet (web chats are only available as a data export):")
+        archive_view.print_exports(missing)
     print()
     cmd_devices(settings, argparse.Namespace())
     print()
     return cmd_connect(settings, argparse.Namespace(tool=None))
+
+
+def cmd_keep(_: Settings, __: argparse.Namespace) -> int:
+    from anamnesis.retention import claude_code_cleanup_days, keep_claude_code_history
+
+    if claude_code_cleanup_days() is None:
+        print("Claude Code isn't used on this computer (or its settings can't be read).")
+        return 1
+    try:
+        print(f"Claude Code: {keep_claude_code_history()}")
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    print("Old sessions now stay resumable in Claude Code (they use disk space in ~/.claude).")
+    return 0
 
 
 def cmd_connect(settings: Settings, args: argparse.Namespace) -> int:
@@ -329,7 +353,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--watch", action="store_true", help="keep running and import continuously")
     p.add_argument("--interval", type=float, default=30.0)
     p.add_argument("--force", action="store_true", help="re-read every file")
-    p = sub.add_parser("import", help="import ChatGPT / claude.ai / Gemini Takeout exports")
+    p = sub.add_parser(
+        "import",
+        help="import ChatGPT / claude.ai / Gemini Takeout exports",
+        description="Import web chats from a data export (the .zip, or the JSON inside it).",
+        epilog=_EXPORT_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument("files", nargs="+")
     p = sub.add_parser("search", help="search memory")
     p.add_argument("query", nargs="+")
@@ -347,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("devices", help="computers sharing this memory")
     sub.add_parser("unshare", help="stop syncing memory on this computer")
     sub.add_parser("status", help="what is stored, and which tools are connected")
+    sub.add_parser("keep", help="stop Claude Code deleting its sessions after 30 days")
     sub.add_parser("mcp", help="run the MCP server on stdio")
     sub.add_parser("tui", help="open the terminal UI (default)")
     from anamnesis.cli import node_cmd
@@ -369,6 +400,7 @@ COMMANDS = {
     "connect": cmd_connect,
     "disconnect": cmd_disconnect,
     "status": cmd_status,
+    "keep": cmd_keep,
     "share": cmd_share,
     "join": cmd_join,
     "devices": cmd_devices,

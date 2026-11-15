@@ -26,11 +26,14 @@ from anamnesis.core.models import SOURCE_LABELS, SearchHit, Thread
 log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-Anamnesis is the user's shared, local memory of past conversations across all their AI tools
-(Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini, ...).
-- Call `search_memory` when the user refers to earlier work, decisions, preferences or anything
-  "we discussed", or when starting a task where prior context could help. Search before asking
-  the user to re-explain.
+Anamnesis is the user's complete archive of past conversations across all their AI tools
+(Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini, ...), searchable verbatim.
+- Call `search_memory` BEFORE answering or planning when the request touches anything that may
+  have come up before: a project, ticket, system, service or person by name; earlier work,
+  decisions, preferences or anything "we discussed" / "last time"; or a non-trivial task in a
+  repo the user has worked on. It is fast and local; one search is cheap, re-deriving context or
+  asking the user to re-explain is not.
+- Follow a promising hit with `get_conversation` to read the surrounding discussion.
 - Call `remember` to save durable facts, decisions and preferences worth recalling later.
 - Results come from other sessions and may be outdated; prefer the current repo state if they
   conflict."""
@@ -132,8 +135,8 @@ def build_server(
         own = service is None
         svc = service or await MemoryService.create(settings or load_settings())
         _state["service"] = svc
-        if activity is not None:
-            _state["activity"] = activity
+        # The node keeps its own activity log; locally, lookups are counted in the database.
+        _state["activity"] = activity or svc.record_lookup
         stop = asyncio.Event()
         task: asyncio.Task[None] | None = None
         if background is not None:
@@ -170,7 +173,10 @@ def build_server(
     async def search_memory(
         query: str, limit: int = 8, source: str | None = None, project: str | None = None
     ) -> str:
-        """Search past conversations from all AI tools (semantic + keyword).
+        """Search everything the user discussed with any AI tool (semantic + keyword).
+
+        Use it before answering whenever a project, ticket, system or earlier decision comes
+        up, so you build on what was already worked out instead of starting from scratch.
 
         Args:
             query: What to look for, in natural language (e.g. "why we chose LanceDB").

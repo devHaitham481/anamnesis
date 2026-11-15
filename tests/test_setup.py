@@ -85,3 +85,21 @@ def test_disconnect_all(home: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert gemini_entry(home) is None
     assert main(["disconnect", "all"]) == 0
     assert "No AI tool is connected" in capsys.readouterr().out
+
+
+def test_setup_offers_to_keep_claude_code_history(
+    home: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    (home / ".claude" / "projects").mkdir(parents=True)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))  # no terminal: never changed unasked
+    assert main(["setup", "--skip-import"]) == 0
+    out = capsys.readouterr().out
+    assert "Claude Code deletes conversations after 30 days" in out
+    assert "anam keep" in out and not (home / ".claude" / "settings.json").exists()
+    assert "Add your web chats" in out and "anam import" in out
+
+    assert main(["setup", "--yes", "--skip-import"]) == 0
+    assert json.loads((home / ".claude" / "settings.json").read_text())["cleanupPeriodDays"] > 30
+    assert main(["setup", "--yes", "--skip-import"]) == 0
+    assert "Nothing to change" in capsys.readouterr().out

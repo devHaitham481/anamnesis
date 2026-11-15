@@ -278,6 +278,7 @@ async def test_mcp_server_over_stdio_like_a_real_client(tmp_path: Path) -> None:
     errlog.close()
     async with Database(data / "anamnesis.db") as db:
         assert await db.source_counts() == {"claude-code": 1, "note": 1}
+        assert await db.lookup_count(0) == 2  # counted for `anam status`
 
 
 # ---------- connect ----------

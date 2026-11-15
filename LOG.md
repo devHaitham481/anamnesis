@@ -165,3 +165,14 @@ Measured on a copy of a real memory (63 conversations, largest 1,833 messages):
 - **Panel focus:** highlighted with inline border styles, not CSS `:focus-within`. That pseudo-class made Textual restyle the panel's whole subtree on every focus change.
 - **Sidebar rows:** each renders itself, with no child widgets. A background change that leaves the order alone updates rows in place instead of rebuilding the list; the cursor no longer jumps.
 - **Tests:** +2 (paging in order with nothing doubled; in-place updates keep the cursor).
+
+## 2026-11-15 — The archive
+
+Why: the research showed "memory for agents" is crowded (claude-mem, agentmemory, cass, UltraContext), and on the author's own machine agents called the memory twice in 38 sessions. A permanent, verbatim archive across coding agents and web chats is the gap nobody fills, and Claude Code's 30-day transcript deletion makes the loss concrete.
+
+- **`anam status`:** the archive first: totals since the earliest message, per tool with "+N this week", "Kept N Claude Code sessions that Claude Code has since deleted" (imported files whose originals are gone), the week's agent lookups, and the web exports not imported yet. Empty leftover threads aren't counted.
+- **Keeping Claude Code's own copies:** `anamnesis/retention.py` reads `cleanupPeriodDays` (default 30; honors `CLAUDE_CONFIG_DIR`). `anam setup` asks to set it to 36,500 days; `anam keep` does it any time. Merged, backed up, and an invalid settings file is left alone.
+- **Lookups:** the local MCP server records each tool call in a `lookups` table (the node keeps its own activity log).
+- **MCP instructions:** search before answering when a named project, ticket, system or earlier decision comes up; follow hits with `get_conversation`.
+- **Copy:** README and website lead with "Never lose an AI conversation again."
+- **Tests:** +6 (retention defaults and merge, a broken settings file, kept-after-deletion, archive summary, status and keep commands, the setup step) and lookups counted over real stdio.
