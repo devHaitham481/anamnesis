@@ -104,7 +104,7 @@ def test_status_and_keep_commands(
 
     main(["status"])
     out = capsys.readouterr().out
-    assert "Nothing archived yet" in out
+    assert "nothing archived yet" in out
     assert "claude.ai" in out and "anam import" in out  # how to add web chats
 
     assert main(["keep"]) == 0

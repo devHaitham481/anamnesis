@@ -38,7 +38,7 @@ def test_setup_with_no_tools(home: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert main(["setup", "--yes"]) == 0
     out = capsys.readouterr().out
     assert "None of the supported tools were found" in out
-    assert "Nothing to connect" in out and "Done." in out
+    assert "Nothing to connect" in out and "DONE" in out
 
 
 def test_setup_connects_found_tools_and_is_rerunnable(

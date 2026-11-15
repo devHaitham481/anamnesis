@@ -12,7 +12,6 @@ import logging
 import time
 from datetime import datetime
 
-from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -21,18 +20,13 @@ from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, ListView, Static
 
 from anamnesis.cli.commands import Command, CommandError, help_text, is_command, parse_command
+from anamnesis.cli.look import BLURRED, MUTED, RUST, pill, project_name, relative_time, snippet
 from anamnesis.cli.widgets import (
-    BLURRED,
     MARKDOWN_STYLES,
-    MUTED,
-    RUST,
     THEME,
     MessageView,
     SearchResultsView,
     ThreadItem,
-    project_name,
-    relative_time,
-    snippet,
 )
 from anamnesis.config import Settings, load_settings
 from anamnesis.core.db import ThreadNotFoundError
@@ -88,7 +82,7 @@ class AnamnesisApp(App[None]):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="topbar"):
-            yield Label(Text.assemble(("◉ ", RUST), ("anamnesis", "bold")), id="brand")
+            yield Label(pill("ANAMNESIS"), id="brand")
             yield Static("Loading memory…", id="status")
         with Horizontal(id="body"):
             with Vertical(id="sidebar") as sidebar:

@@ -19,9 +19,9 @@
   <img alt="Works with claude.ai" src="https://img.shields.io/badge/claude.ai-d97757?logo=claude&logoColor=white">
 </p>
 
-<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/screenshot.svg" alt="The Anamnesis terminal UI: Claude Code recalling a decision made in ChatGPT" width="900"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/status.svg" alt="anam status showing an archive of 804 conversations across five AI tools, then Claude Code answering a question from a decision made in ChatGPT" width="760"></p>
 
-<p align="center"><sub>The terminal UI (<code>anam</code>), with sample data.</sub></p>
+<p align="center"><sub><code>anam status</code>, then Claude Code finding an old ChatGPT decision on its own (sample data).</sub></p>
 
 Your AI tools don't keep your history for long. Claude Code deletes sessions after 30 days, and web chats stay locked inside their apps. Anamnesis keeps a permanent, word-for-word archive of your conversations from **Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini** on your computer, and gives it back to every AI tool over [MCP](https://modelcontextprotocol.io). Ask Claude Code "what did we decide about auth?" and it finds the answer, even if you worked it out in ChatGPT months ago.
 
@@ -87,9 +87,7 @@ rm -rf ~/.anamnesis          # your memory; skip this to keep it
 
 ## Using it
 
-Just keep working. While any connected tool is running, new conversations sync in the background, and agents search the memory when you refer to earlier work.
-
-<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/search.svg" alt="Searching memory: one result per conversation, from ChatGPT, Claude Code and a saved note" width="900"></p>
+Just keep working. While any connected tool is running, new conversations are archived in the background, and agents search the memory when earlier work comes up.
 
 ```bash
 anam                         # browse and search everything in the terminal
@@ -107,6 +105,12 @@ anam keep                    # stop Claude Code deleting its sessions after 30 d
 | Gemini (web) | `anam import <takeout.zip>` | Google Takeout → My Activity → *Gemini Apps*, format **JSON** |
 
 `anam status` shows the archive, what it has kept after a tool deleted it, how often your agents used it this week, and which web chats you haven't imported yet. Only what you and the assistant *said* is kept: tool calls and output, reasoning, and injected system context are skipped. Re-importing is safe.
+
+### Browse it yourself
+
+`anam` opens the archive in the terminal: every conversation from every tool, and search across all of them.
+
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/search.svg" alt="The Anamnesis terminal UI: conversations from every tool on the left, search results from ChatGPT, Claude Code and a saved note on the right" width="900"></p>
 
 ## In claude.ai, ChatGPT and on your phone
 
@@ -180,7 +184,7 @@ anam mcp                  the MCP server (connected tools start it for you)
 <details>
 <summary>Terminal UI</summary>
 
-Each conversation has a source badge (`CC` Claude Code, `CX` Codex, `GC` Gemini CLI, `CU` Cursor, `GPT` ChatGPT, `CL` claude.ai, `GW` Gemini web, `NB` saved notes). Type in the bottom box to search.
+Each conversation shows a dot in its tool's color; search results carry the tool's name as a label. Type in the search box at the top.
 
 | Key / command | Action |
 |---|---|

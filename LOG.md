@@ -176,3 +176,11 @@ Why: the research showed "memory for agents" is crowded (claude-mem, agentmemory
 - **MCP instructions:** search before answering when a named project, ticket, system or earlier decision comes up; follow hits with `get_conversation`.
 - **Copy:** README and website lead with "Never lose an AI conversation again."
 - **Tests:** +6 (retention defaults and merge, a broken settings file, kept-after-deletion, archive summary, status and keep commands, the setup step) and lookups counted over real stdio.
+
+## 2026-11-15 — A Lip Gloss-style look
+
+- **`anamnesis/cli/look.py`:** one look for the CLI and the TUI, after Charm's Lip Gloss: solid "pill" labels, rounded padded cards, thin bars, quiet secondary text, in the rust/charcoal palette. The palette and text helpers moved here from `widgets.py`, so plain commands don't import Textual.
+- **`anam status`:** an ARCHIVE card (totals, a bar per tool sorted by size, "+N this week", what was kept, Claude Code's deletion), then AGENTS, TOOLS (colored by state), WEB CHATS and SYNC sections.
+- **`anam setup`:** numbered pill steps, colored ✓/✗ rows, ends with the same archive card.
+- **TUI:** a pill wordmark; search results carry the tool as a colored label.
+- **README:** the top image is now `docs/status.svg`, drawn by the status code itself (`scripts/status_screenshot.py`, sample data). The TUI moved to a "Browse it yourself" section. The landing page terminal uses the same pills.

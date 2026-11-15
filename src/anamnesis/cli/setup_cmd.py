@@ -12,9 +12,13 @@ from __future__ import annotations
 import argparse
 import sys
 
+from rich.text import Text
+
+from anamnesis.cli.look import AMBER, FAINT, FG, GREEN, MUTED, RED, RUST, console, pill
 from anamnesis.config import Settings
 
 DOCS = "https://github.com/devHaitham481/anamnesis#readme"
+PAD = "     "  # body text lines up under the step title
 
 
 def _ask(question: str, assume_yes: bool) -> bool | None:
@@ -24,14 +28,30 @@ def _ask(question: str, assume_yes: bool) -> bool | None:
     if not sys.stdin.isatty():
         return None
     try:
-        answer = input(f"{question} [Y/n] ").strip().lower()
+        answer = input(f"{PAD}{question} [Y/n] ").strip().lower()
     except EOFError:
         return None
     return answer in ("", "y", "yes")
 
 
-def _heading(n: int, text: str) -> None:
-    print(f"\n{n}. {text}")
+def _step(n: int, title: str) -> None:
+    con = console()
+    con.print()
+    con.print(Text.assemble(pill(str(n)), " ", (title, f"bold {FG}")))
+
+
+def _say(text: str, style: str = MUTED) -> None:
+    console().print(Text(f"{PAD}{text}", style=style))
+
+
+def _row(mark: str, label: str, note: str, color: str = GREEN, note_style: str = MUTED) -> None:
+    console().print(
+        Text.assemble((f"{PAD}{mark} ", color), (f"{label:<16} ", FG), (note, note_style))
+    )
+
+
+def _cmd(text: str) -> Text:
+    return Text(text, style=f"bold {RUST}")
 
 
 def run(settings: Settings, args: argparse.Namespace) -> int:
@@ -46,86 +66,105 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
 
     if hasattr(sys.stdout, "reconfigure"):  # keep step output in order when piped (curl | sh)
         sys.stdout.reconfigure(line_buffering=True)
-    print("Anamnesis setup")
-    print(f"Memory is stored in {settings.data_dir}")
+    con = console()
+    con.print()
+    con.print(Text.assemble(pill("ANAMNESIS"), ("  setup", f"bold {FG}")))
+    con.print(Text(f"  Your archive lives in {settings.data_dir}", style=MUTED))
 
-    _heading(1, "AI tools on this computer")
+    _step(1, "AI tools on this computer")
     tools = targets()
     found = [t for t in tools.values() if t.installed()]
     for t in tools.values():
-        mark = "✓" if t in found else "·"
-        print(f"   {mark} {t.label:<16} {'found' if t in found else 'not installed'}")
+        if t in found:
+            _row("✓", t.label, "found")
+        else:
+            _row("·", t.label, "not installed", color=FAINT, note_style=FAINT)
     if not found:
-        print("   None of the supported tools were found. You can still import ChatGPT,")
-        print("   claude.ai or Gemini exports later with `anam import <file>`.")
+        _say("None of the supported tools were found. You can still import ChatGPT,")
+        _say("claude.ai or Gemini exports later with `anam import <file>`.")
 
-    _heading(2, "Archiving your history")
+    _step(2, "Archiving your history")
     if args.skip_import:
-        print("   skipped (--skip-import)")
+        _say("skipped (--skip-import)")
     else:
         if not (settings.data_dir / "models").is_dir() and settings.semantic_search:
-            print("   First run: downloading the search model (about 70 MB, once).")
+            _say("First run: downloading the search model (about 70 MB, once).")
         code = cmd_sync(settings, argparse.Namespace(watch=False, force=False, interval=30.0))
         if code != 0:
-            print("   Import did not finish; run `anam sync` to try again.", file=sys.stderr)
+            print(f"{PAD}Import did not finish; run `anam sync` to try again.", file=sys.stderr)
 
-    _heading(3, "Keeping your history")
+    _step(3, "Keeping your history")
     days = claude_code_cleanup_days()
     if deletes_history(days):
-        print(f"   Claude Code deletes conversations after {days} days. Anamnesis keeps its own")
-        print("   copy either way; turning the deletion off keeps them resumable in Claude Code.")
-        answer = _ask("   Stop Claude Code deleting old conversations?", args.yes)
+        _say(f"Claude Code deletes conversations after {days} days. Anamnesis keeps its own")
+        _say("copy either way; turning the deletion off keeps them resumable in Claude Code.")
+        answer = _ask("Stop Claude Code deleting old conversations?", args.yes)
         if answer is None:
-            print("   No terminal to ask in. Run `anam keep` to do it later.")
+            _say("No terminal to ask in. Run `anam keep` to do it later.", AMBER)
         elif not answer:
-            print("   Left as is. Change your mind with `anam keep`.")
+            _say("Left as is. Change your mind with `anam keep`.")
         else:
             try:
-                print(f"   ✓ Claude Code      {keep_claude_code_history()}")
+                _row("✓", "Claude Code", keep_claude_code_history())
             except ValueError as e:
-                print(f"   ✗ Claude Code      {e}", file=sys.stderr)
+                _row("✗", "Claude Code", str(e), color=RED)
     else:
-        print("   Nothing to change: Anamnesis keeps everything it archives, permanently.")
+        _say("Nothing to change: Anamnesis keeps everything it archives, permanently.")
 
-    _heading(4, "Connecting your AI tools")
+    _step(4, "Connecting your AI tools")
     todo = [t for t in found if not t.current()]
     connected = [t for t in found if t not in todo]
     for t in connected:
-        print(f"   ✓ {t.label:<16} already connected")
+        _row("✓", t.label, "already connected")
     failed = False
     if todo:
         names = ", ".join(t.label for t in todo)
-        answer = _ask(f"   Give {names} access to your memory?", args.yes)
+        answer = _ask(f"Give {names} access to your memory?", args.yes)
         if answer is None:
-            print("   No terminal to ask in. Run `anam connect all` when ready.")
+            _say("No terminal to ask in. Run `anam connect all` when ready.", AMBER)
         elif not answer:
-            print("   Skipped. Connect later with `anam connect all`.")
+            _say("Skipped. Connect later with `anam connect all`.")
         else:
             for t in todo:
                 try:
-                    print(f"   ✓ {t.label:<16} {t.connect()}")
+                    _row("✓", t.label, t.connect())
                     connected.append(t)
                 except Exception as e:
-                    print(f"   ✗ {t.label:<16} failed: {e}", file=sys.stderr)
+                    _row("✗", t.label, f"failed: {e}", color=RED)
                     failed = True
     elif not found:
-        print("   Nothing to connect.")
+        _say("Nothing to connect.")
 
     archive = archive_view.load(settings)
-    print("\nDone. Your archive:\n")
-    archive_view.print_archive(settings, archive, indent="   ", retention=False)
+    con.print()
+    con.print(Text.assemble(pill("DONE", GREEN), ("  Your archive:", f"bold {FG}")))
+    con.print()
+    con.print(archive_view.render_archive(archive))
     missing = archive_view.missing_exports(archive)
     if missing:
-        print("\nAdd your web chats (they live on the providers' servers, so export them once):")
-        archive_view.print_exports(missing, indent="   ")
+        con.print()
+        con.print(Text("Add your web chats: export them once.", style=f"bold {FG}"))
+        con.print()
+        con.print(archive_view.render_exports(missing))
 
-    print("\nNext:")
+    con.print()
+    con.print(pill("NEXT"))
     if connected:
         names = ", ".join(t.label for t in connected)
-        print(f"  • Restart {names} (or open a new session) so they load the memory.")
-        print('  • Then ask about earlier work, e.g. "what did we decide about auth?"')
-    print("  • Browse everything: anam        Search: anam search <words>")
-    print("  • New history keeps syncing while a connected tool is running.")
-    print("  • claude.ai and ChatGPT (web and phone): run your own node, see `anam node -h`.")
-    print(f"  • Docs: {DOCS}")
+        _say(f"• Restart {names} (or open a new session) so they load the memory.", FG)
+        _say('• Then ask about earlier work, e.g. "what did we decide about auth?"', FG)
+    con.print(
+        Text.assemble(
+            (f"{PAD}• Browse: ", MUTED),
+            _cmd("anam"),
+            ("   Search: ", MUTED),
+            _cmd("anam search <words>"),
+            ("   Archive: ", MUTED),
+            _cmd("anam status"),
+        )
+    )
+    _say("• New history keeps syncing while a connected tool is running.")
+    _say("• claude.ai and ChatGPT (web and phone): run your own node, see `anam node -h`.")
+    _say(f"• Docs: {DOCS}")
+    con.print()
     return 1 if failed else 0

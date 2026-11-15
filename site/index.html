@@ -80,6 +80,9 @@
   .term .a { color: var(--accent); }
   .term .d { color: var(--muted); }
   .term .q { font-weight: 500; }
+  .term .pill { background: var(--accent); color: #121110; font-weight: 700; padding: 0 .45em; border-radius: 3px; }
+  .term .pill.g { background: #5fbf8f; }
+  .term .ok { color: #5fbf8f; }
 
   /* sources */
   .sources { padding: 40px 0; }
@@ -198,14 +201,15 @@
       <div class="term" aria-label="Example: Claude Code recalling a decision made in ChatGPT">
         <div class="bar"><i></i><i></i><i></i></div>
 <pre><span class="p">$</span> anam status
-<span class="a">✓</span> 212 conversations since Jan 2025 · 4 tools
-  <span class="d">kept 38 sessions Claude Code has deleted</span>
+<span class="pill">ARCHIVE</span> <span class="d">every conversation, kept</span>
+<span class="a">804</span> <span class="d">conversations since Feb 2025</span>
+<span class="ok">✓</span> kept 91 sessions Claude Code deleted
 
 <span class="p">$</span> claude
 <span class="p">&gt;</span> <span class="q">why did we pick session cookies over JWT?</span>
 
 <span class="a">●</span> search_memory(<span class="d">"session cookies vs JWT"</span>)
-  <span class="d">ChatGPT · api-server · Mar 4</span>
+  <span class="pill g">ChatGPT</span> <span class="d">api-server · Mar 4</span>
   <span class="d">"…we need instant revocation, so server-side</span>
   <span class="d"> sessions; JWT would mean a denylist anyway."</span>
 

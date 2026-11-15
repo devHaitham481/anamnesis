@@ -142,23 +142,49 @@ def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def tool_states() -> list[tuple[str, str]]:
+    from anamnesis.connect import targets
+
+    out = []
+    for t in targets().values():
+        if t.connected():
+            state = "connected" if t.current() else "outdated"
+        else:
+            state = "not connected" if t.installed() else "not installed"
+        out.append((t.label, state))
+    return out
+
+
 def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
+    from rich.text import Text
+
     from anamnesis.cli import archive_view
+    from anamnesis.cli.look import MUTED, console, heading
+    from anamnesis.core.devices import load_config
+    from anamnesis.retention import claude_code_cleanup_days
 
     archive = archive_view.load(settings)
-    print(f"Archive: {settings.data_dir}")
-    archive_view.print_archive(settings, archive)
-    if archive.conversations:
-        print()
-        archive_view.print_lookups(archive)
+    con = console()
+    con.print()
+    con.print(archive_view.render_archive(archive, retention_days=claude_code_cleanup_days()))
+    con.print(Text(f"  {settings.data_dir}", style=MUTED))
+    con.print()
+    con.print(archive_view.render_lookups(archive))
+    con.print()
+    con.print(archive_view.render_tools(tool_states()))
     missing = archive_view.missing_exports(archive)
     if missing:
-        print("\nNot imported yet (web chats are only available as a data export):")
-        archive_view.print_exports(missing)
-    print()
-    cmd_devices(settings, argparse.Namespace())
-    print()
-    return cmd_connect(settings, argparse.Namespace(tool=None))
+        con.print()
+        con.print(archive_view.render_exports(missing))
+    con.print()
+    cfg = load_config(settings.data_dir)
+    if cfg is None:
+        con.print(heading("SYNC", "off: `anam node link <url>` or `anam share`", color="#4a443d"))
+    else:
+        con.print(heading("SYNC", f"through {'your node ' if cfg.node else ''}{cfg.where}"))
+        cmd_devices(settings, argparse.Namespace())
+    con.print()
+    return 0
 
 
 def cmd_keep(_: Settings, __: argparse.Namespace) -> int:
@@ -184,17 +210,12 @@ def cmd_connect(settings: Settings, args: argparse.Namespace) -> int:
         return connect_web(settings, args.tool)
     all_targets = targets()
     if not args.tool:
-        print("AI tools (MCP access to memory):")
-        for t in all_targets.values():
-            state = (
-                ("connected" if t.current() else "outdated (run `anam connect all`)")
-                if t.connected()
-                else "not connected"
-                if t.installed()
-                else "not installed"
-            )
-            print(f"  {t.name:<15} {t.label:<15} {state}")
-        print("\nConnect with: anam connect <tool>   or   anam connect all")
+        from anamnesis.cli.archive_view import render_tools
+        from anamnesis.cli.look import console
+
+        console().print(render_tools(tool_states()))
+        names = ", ".join(all_targets)
+        print(f"\nConnect with: anam connect <tool>   or   anam connect all  ({names})")
         print("Web apps (through your node): anam connect claude-web | chatgpt-web")
         return 0
     if args.tool == "all":
