@@ -110,3 +110,14 @@ def test_status_and_keep_commands(
     assert main(["keep"]) == 0
     assert "cleanupPeriodDays" in capsys.readouterr().out
     assert claude_code_cleanup_days() == KEEP_DAYS
+
+
+def test_search_shorthand() -> None:
+    from anamnesis.cli.__main__ import _search_shorthand as sh
+
+    assert sh(["preview", "environments"]) == ["search", "preview", "environments"]
+    assert sh(["preview environments"]) == ["search", "preview", "environments"]
+    assert sh(["search preview environments"]) == ["search", "preview environments"]
+    assert sh(["search", "preview", "environments"]) == ["search", "preview", "environments"]
+    assert sh(["import", "My Export.zip"]) == ["import", "My Export.zip"]
+    assert sh(["status"]) == ["status"] and sh([]) == [] and sh(["--version"]) == ["--version"]

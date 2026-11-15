@@ -4,7 +4,7 @@ anam setup                guided first run: import history, connect your AI tool
 anam                      open the terminal memory browser
 anam sync [--watch]       import new history from Claude Code, Codex, Gemini CLI, Cursor
 anam import FILE...       import a ChatGPT / claude.ai / Gemini (Takeout) data export
-anam search QUERY         search all memory from the shell
+anam search QUERY         search all memory from the shell (or just: anam QUERY)
 anam connect [TOOL|all]   give AI tools access to the memory (MCP); no TOOL = show status
 anam disconnect TOOL|all
 anam status               your archive: what is kept, per tool, and what's missing
@@ -475,7 +475,21 @@ def cmd_node(settings: Settings, args: argparse.Namespace) -> int:
 COMMANDS["node"] = cmd_node
 
 
+def _search_shorthand(argv: list[str]) -> list[str]:
+    """`anam <words>` searches: anything that isn't a command or an option is a query.
+
+    Also splits a quoted command line, e.g. `anam "search preview environments"`.
+    """
+    if not argv or argv[0].startswith("-"):
+        return argv
+    first, *rest = argv[0].split(maxsplit=1)
+    if first in COMMANDS:
+        return [first, *rest, *argv[1:]] if rest else argv
+    return ["search", *" ".join(argv).split()]
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = _search_shorthand(list(sys.argv[1:] if argv is None else argv))
     args = build_parser().parse_args(argv)
     settings = load_settings()
     serving = args.command == "node" and args.node_command == "serve"

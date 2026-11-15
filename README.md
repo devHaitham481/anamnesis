@@ -96,7 +96,7 @@ Just keep working. While any connected tool is running, new conversations are ar
 
 ```bash
 anam                         # browse and search everything in the terminal
-anam search "auth decision"  # search from the shell
+anam search "auth decision"  # search from the shell (or just: anam auth decision)
 anam import chatgpt.zip      # add a ChatGPT, claude.ai or Gemini data export
 anam status                  # your archive: what's kept per tool, what's missing
 anam keep                    # stop Claude Code deleting its sessions after 30 days
@@ -170,7 +170,7 @@ anam setup                guided setup; safe to re-run (after upgrades too)
 anam                      terminal memory browser
 anam sync [--watch]       import new local history now (or keep watching)
 anam import FILE...       import ChatGPT / claude.ai / Gemini Takeout exports
-anam search QUERY         search everything from the shell  [--source chatgpt]
+anam search QUERY         search everything from the shell  [--source chatgpt]  (or just: anam QUERY)
 anam connect [TOOL|all]   claude-code, claude-desktop, cursor, gemini-cli, codex
 anam disconnect TOOL|all
 anam status               your archive per tool, what's missing, sync state, connected tools
