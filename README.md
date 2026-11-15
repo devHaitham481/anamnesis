@@ -33,6 +33,11 @@ Your AI tools don't keep your history for long. Claude Code deletes sessions aft
 
 It is only the memory: it never calls a model, and you keep using the tools you already use.
 
+
+## Why "Anamnesis"?
+
+*Anamnesis* (Greek ἀνάμνησις) means "recollection". In Plato it's the idea that learning is remembering what you already knew; in medicine it's a patient's history, taken so nobody starts from scratch. Both fit: your AI tools recall what you already worked out, with your whole history in front of them.
+
 ## Install
 
 On macOS or Linux:
@@ -234,9 +239,6 @@ Use your checkout as your everyday `anam` with `uv tool install -e .` then `anam
 
 Code lives in `src/anamnesis/`: `ingest/` (one parser per tool), `memory_mcp/` (MCP server), `core/` (storage, search, sync), `node/` (self-hosted node), `cli/` and `web/` (interfaces), `connect.py` (tool registration). The website and `install.sh` are in `site/`.
 
-## Why "Anamnesis"?
-
-*Anamnesis* (Greek ἀνάμνησις) means "recollection". In Plato it's the idea that learning is remembering what you already knew; in medicine it's a patient's history, taken so nobody starts from scratch. Both fit: your AI tools recall what you already worked out, with your whole history in front of them.
 
 ## License
 
