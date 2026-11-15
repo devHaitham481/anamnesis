@@ -51,7 +51,7 @@ say "Installing Anamnesis…"
 if uv tool list 2>/dev/null | grep -q '^anamnesis v'; then
   uv tool uninstall anamnesis >/dev/null 2>&1 || true
 fi
-uv tool install --force --reinstall --refresh --python "$PYTHON_VERSION" "$source"
+uv tool install --force --reinstall --refresh --compile-bytecode --python "$PYTHON_VERSION" "$source"
 
 bin_dir="$(uv tool dir --bin)"
 anam="$bin_dir/anam"
