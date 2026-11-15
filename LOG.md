@@ -184,3 +184,7 @@ Why: the research showed "memory for agents" is crowded (claude-mem, agentmemory
 - **`anam setup`:** numbered pill steps, colored ✓/✗ rows, ends with the same archive card.
 - **TUI:** a pill wordmark; search results carry the tool as a colored label.
 - **README:** the top image is now `docs/status.svg`, drawn by the status code itself (`scripts/status_screenshot.py`, sample data). The TUI moved to a "Browse it yourself" section. The landing page terminal uses the same pills.
+
+## 2026-11-15 — `anam status` in under a second
+
+`anam status` took 7.7 s: checking Claude Code ran `claude mcp get` twice, about 2.9 s each (the Bun CLI starts and health-checks the server). The entry is now read straight from `~/.claude.json` (`CLAUDE_CONFIG_DIR` honored), with the CLI kept as a fallback when that file can't be read. Now 0.76 s; `anam setup` and `anam connect` get faster too.

@@ -6,6 +6,7 @@ Every edit is a merge (other servers/settings are kept) and a `.bak` copy is wri
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -209,7 +210,31 @@ def _short_error(res: subprocess.CompletedProcess[str]) -> str:
     return (lines[-1] if lines else f"exit code {res.returncode}")[:200]
 
 
+_UNKNOWN: Any = object()
+
+
+def _claude_json() -> Path:
+    """Claude Code's own config file, where `claude mcp add --scope user` writes."""
+    base = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(base) / ".claude.json" if base else Path.home() / ".claude.json"
+
+
+def _claude_code_entry() -> Any:
+    """Our user-scope entry, read straight from Claude Code's config: no `claude` process
+    (each one takes ~3 s). None if absent; _UNKNOWN if the file can't be read."""
+    try:
+        data = json.loads(_claude_json().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return _UNKNOWN
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    entry = servers.get(SERVER_NAME) if isinstance(servers, dict) else None
+    return entry if isinstance(entry, dict) else None
+
+
 def _claude_code_connected() -> bool:
+    entry = _claude_code_entry()
+    if entry is not _UNKNOWN:
+        return entry is not None
     try:
         return _claude_run("get", SERVER_NAME).returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -217,6 +242,9 @@ def _claude_code_connected() -> bool:
 
 
 def _claude_code_current() -> bool:
+    entry = _claude_code_entry()
+    if entry is not _UNKNOWN:
+        return entry is not None and _is_current(entry.get("command"), entry.get("args"))
     try:
         res = _claude_run("get", SERVER_NAME)
     except (FileNotFoundError, subprocess.TimeoutExpired):

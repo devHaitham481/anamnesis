@@ -392,10 +392,35 @@ def test_claude_cli_never_gets_the_terminal(monkeypatch: pytest.MonkeyPatch) -> 
     assert str(err.value) == "error: EINVAL: invalid argument, kqueue"  # one line, not a stack
 
 
-def test_claude_code_current_reads_claude_mcp_get(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_claude_code_state_comes_from_its_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No `claude` process (each takes seconds): read ~/.claude.json directly."""
+    from anamnesis import connect
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(connect, "_claude_run", lambda *a: pytest.fail("ran the claude CLI"))
+    command, args = connect.server_command()
+    cfg = tmp_path / ".claude.json"
+    cfg.write_text(json.dumps({"mcpServers": {"other": {"command": "x"}}}))
+    assert not connect._claude_code_connected() and not connect._claude_code_current()
+    entry = {"type": "stdio", "command": command, "args": args, "env": {}}
+    cfg.write_text(json.dumps({"projects": {}, "mcpServers": {"anamnesis": entry}}))
+    assert connect._claude_code_connected() and connect._claude_code_current()
+    entry["command"] = "/old/.venv/bin/python"
+    cfg.write_text(json.dumps({"mcpServers": {"anamnesis": entry}}))
+    assert connect._claude_code_connected() and not connect._claude_code_current()
+
+
+def test_claude_code_current_reads_claude_mcp_get(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fallback when Claude Code's config file can't be read."""
     import subprocess
 
     from anamnesis import connect
+
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))  # no .claude.json there
 
     command, args = connect.server_command()
     output = {"text": ""}
