@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anamnesis-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "One local memory shared by all your AI tools (Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai, Gemini)"
 readme = "README.md"
 license = "MIT"
