@@ -75,7 +75,7 @@ Goal: someone who has never heard of Anamnesis goes from the website to a workin
 - [x] Prebuilt node image on GHCR (amd64 + arm64); docker-compose and `anam node deploy fly` use it, no clone needed.
 - [x] CI (lint, types, tests on 3.11 and 3.13); README and website install guides.
 - [x] PyPI name `anamnesis-cli`, package metadata, release workflow (trusted publishing on `v*` tags).
-- [ ] First PyPI release: add the pending publisher on pypi.org, then tag `v0.1.0`; then point `install.sh` at PyPI.
+- [x] First PyPI release (`v0.1.0`, trusted publishing); `install.sh` installs the latest release from PyPI.
 
 ### Sprint 9: The Archive
 

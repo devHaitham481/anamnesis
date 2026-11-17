@@ -12,12 +12,12 @@
 # Re-run it any time to upgrade. Uninstall: see the README.
 #
 # Environment overrides:
-#   ANAMNESIS_SOURCE      what to install (default: the latest main branch on GitHub)
+#   ANAMNESIS_SOURCE      what to install (default: the latest release on PyPI;
+#                         e.g. git+https://github.com/devHaitham481/anamnesis for main)
 #   ANAMNESIS_NO_SETUP=1  install only; run `anam setup` yourself later
 
 set -eu
 
-REPO="https://github.com/devHaitham481/anamnesis"
 PYTHON_VERSION="3.12"
 
 say() { printf '%s\n' "$*"; }
@@ -38,14 +38,8 @@ if ! command -v uv >/dev/null 2>&1; then
   command -v uv >/dev/null 2>&1 || fail "uv was installed but is not on PATH; open a new terminal and re-run"
 fi
 
-# 2. Anamnesis. A git checkout when git is available, else the source archive.
-if [ -n "${ANAMNESIS_SOURCE:-}" ]; then
-  source="$ANAMNESIS_SOURCE"
-elif command -v git >/dev/null 2>&1; then
-  source="git+$REPO"
-else
-  source="$REPO/archive/refs/heads/main.tar.gz"
-fi
+# 2. Anamnesis: the latest release from PyPI (anamnesis-cli).
+source="${ANAMNESIS_SOURCE:-anamnesis-cli}"
 say "Installing Anamnesis…"
 # Installs from before the package was named anamnesis-cli: remove, so only one `anam` exists.
 if uv tool list 2>/dev/null | grep -q '^anamnesis v'; then

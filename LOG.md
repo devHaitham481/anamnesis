@@ -213,3 +213,9 @@ Measured on a real memory (60 conversations, 7,000 messages), warm:
 
 - `anam` catches Ctrl+C ("Cancelled.", exit 130), broken pipes (`anam search … | head`) and unexpected errors: one line naming the error, where the full traceback was logged (`~/.anamnesis/anamnesis.log`) and where to report it. `ANAMNESIS_DEBUG=1` shows the traceback instead.
 - Setup prompts load `readline`, so arrow keys edit the answer instead of printing `^[[D`.
+
+## 2026-11-17 — On PyPI
+
+- `anamnesis-cli` 0.1.0 is on PyPI (https://pypi.org/project/anamnesis-cli/), published by `release.yml` with trusted publishing when the `v0.1.0` tag was pushed. `uvx --from anamnesis-cli anam`, `uv tool install anamnesis-cli` and `pipx install anamnesis-cli` work.
+- `install.sh` installs the latest PyPI release instead of `main` (`ANAMNESIS_SOURCE=git+https://github.com/devHaitham481/anamnesis` still gets main). README and website show the PyPI commands; README has a PyPI badge.
+- Releasing from now on: bump `version` in pyproject.toml, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.

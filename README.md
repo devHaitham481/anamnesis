@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devHaitham481/anamnesis/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/devHaitham481/anamnesis/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="https://pypi.org/project/anamnesis-cli/"><img alt="PyPI" src="https://img.shields.io/pypi/v/anamnesis-cli?color=e07a4f"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776ab?logo=python&logoColor=white">
   <img alt="MCP" src="https://img.shields.io/badge/MCP-server-c8653a">
   <a href="https://devhaitham481.github.io/anamnesis/"><img alt="Website" src="https://img.shields.io/badge/website-anamnesis-1c1a17"></a>
@@ -60,7 +61,7 @@ The [script](https://devhaitham481.github.io/anamnesis/install.sh) installs [uv]
 <summary>Install without the script</summary>
 
 ```bash
-uv tool install git+https://github.com/devHaitham481/anamnesis   # or: pipx install git+https://…
+uv tool install anamnesis-cli    # or: pipx install anamnesis-cli
 anam setup
 ```
 
