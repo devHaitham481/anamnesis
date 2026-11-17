@@ -232,3 +232,7 @@ Checked against open-source parsers and docs updated in 2025–26 (no Cursor ins
 - **Gemini CLI (0.68):** user messages use `displayContent` (what you typed) instead of the prompt with `@file` contents inlined; `GEMINI_CLI_HOME` is honored; a legacy `.json` session migrated to `.jsonl` isn't read twice; `$rewindTo` an unknown id clears, and `orderIds` puts listed ids last, as upstream does.
 - **Codex (0.170):** more injected context is filtered (`<user_shell_command>`, `<skill>`, `<subagent_notification>`, `<goal_context>`, …); `thread_rolled_back` drops the undone turns; a reverted thread's file (`…_<rollout>.jsonl`) gets its own message ids so new messages aren't lost; internal sessions (review, guardian, memory consolidation) and `phase: commentary` narration are skipped.
 - Current-format fixtures from upstream sources in `tests/fixtures/{gemini_cli,codex}`.
+
+## README: shorter first read
+
+- One badge row plus the tool row; the name note is a two-line quote; install is one paragraph with the rest folded; one command block; the node is three commands; the duplicate TUI screenshot, keys text and commands list are gone; a Contributing section asks for importers (Antigravity, Cursor agent CLI). 248 to 179 lines.
