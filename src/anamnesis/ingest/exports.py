@@ -16,7 +16,8 @@ from anamnesis.core.models import ImportedConversation, ImportedMessage, Role
 from anamnesis.ingest.base import text_of, to_epoch
 from anamnesis.ingest.clean import clean_text
 
-GEMINI_SESSION_GAP = 30 * 60  # Takeout has no conversation ids: split turns on 30-minute gaps
+GEMINI_SESSION_GAP = 30 * 60  # Takeout records without a chat link: split on gaps
+ATTACHMENT_CHARS = 20_000  # pasted files and documents can be huge
 
 
 class ExportFormatError(ValueError):
@@ -26,6 +27,11 @@ class ExportFormatError(ValueError):
 def parse_export(path: Path) -> Iterator[ImportedConversation]:
     found = False
     for _name, data in _json_documents(path):
+        if isinstance(data, dict) and isinstance(data.get("data_files"), list):
+            raise ExportFormatError(
+                f"{path.name} is the download list of a large claude.ai export: download the "
+                "batch .zip files it links to and import those."
+            )
         kind = detect(data)
         if kind == "chatgpt":
             yield from parse_chatgpt(data)
@@ -73,26 +79,49 @@ def detect(data: Any) -> str | None:
 # ---------- ChatGPT ----------
 
 _CHATGPT_TEXT_TYPES = {"text", "multimodal_text"}
+# Web-search citations are private-use markers, e.g. "\ue200cite\ue202turn0search0\ue201".
+_CITATION = re.compile(r"\s*\ue200[^\ue201]*\ue201|[\ue200-\ue2ff]")
+
+
+def _chatgpt_parts(parts: list[Any]) -> str:
+    out: list[str] = []
+    for part in parts:
+        if isinstance(part, str):
+            out.append(part)
+        elif isinstance(part, dict):
+            kind = str(part.get("content_type", ""))
+            if isinstance(part.get("text"), str):  # e.g. audio_transcription (voice chats)
+                out.append(part["text"])
+            elif kind.startswith("image"):
+                out.append("[image]")
+    return _CITATION.sub("", "\n\n".join(p for p in out if p.strip()))
+
+
+def _chatgpt_branch(mapping: dict[str, Any], current: Any) -> list[dict[str, Any]]:
+    """The visible branch: from the current node (or the newest leaf) up to the root."""
+    if not (isinstance(current, str) and current in mapping):
+        leaves = [
+            (to_epoch((n.get("message") or {}).get("create_time")), k)
+            for k, n in mapping.items()
+            if isinstance(n, dict) and not n.get("children")
+        ]
+        current = max(leaves)[1] if leaves else None
+    chain: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    while isinstance(current, str) and current in mapping and current not in seen:
+        seen.add(current)
+        node = mapping[current]
+        chain.append(node)
+        current = node.get("parent")
+    chain.reverse()
+    return chain
 
 
 def parse_chatgpt(data: list[Any]) -> Iterator[ImportedConversation]:
     for conv in data:
         if not isinstance(conv, dict) or not isinstance(conv.get("mapping"), dict):
             continue
-        mapping: dict[str, Any] = conv["mapping"]
-        # The visible branch: walk up from the current node, then reverse.
-        node_id = conv.get("current_node")
-        chain: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        while isinstance(node_id, str) and node_id in mapping and node_id not in seen:
-            seen.add(node_id)
-            node = mapping[node_id]
-            chain.append(node)
-            node_id = node.get("parent")
-        if not chain:  # no current_node: fall back to mapping order
-            chain = list(mapping.values())
-        else:
-            chain.reverse()
+        chain = _chatgpt_branch(conv["mapping"], conv.get("current_node"))
         created = to_epoch(conv.get("create_time"))
         messages = []
         for node in chain:
@@ -109,8 +138,7 @@ def parse_chatgpt(data: list[Any]) -> Iterator[ImportedConversation]:
                 or content.get("content_type") not in _CHATGPT_TEXT_TYPES
             ):
                 continue
-            parts = [p for p in content.get("parts") or [] if isinstance(p, str)]
-            text = clean_text("\n\n".join(parts))
+            text = clean_text(_chatgpt_parts(content.get("parts") or []))
             if text:
                 messages.append(
                     ImportedMessage(
@@ -144,8 +172,17 @@ def parse_claude(data: list[Any]) -> Iterator[ImportedConversation]:
                 continue
             role = {"human": "user", "assistant": "assistant"}.get(msg.get("sender", ""))
             blocks = msg.get("content")
-            text = text_of(blocks, ("text",)) if isinstance(blocks, list) and blocks else ""
-            text = clean_text(text or str(msg.get("text") or ""))
+            if isinstance(blocks, list) and blocks:
+                # `text` is only a fallback for old exports: next to `content` it can hold a
+                # placeholder ("This block is not supported on your current device yet.").
+                text = text_of(blocks, ("text",))
+            else:
+                text = str(msg.get("text") or "")
+            for att in msg.get("attachments") or []:
+                if isinstance(att, dict) and str(att.get("extracted_content") or "").strip():
+                    name = att.get("file_name") or "attachment"
+                    text += f"\n\n[{name}]\n{str(att['extracted_content'])[:ATTACHMENT_CHARS]}"
+            text = clean_text(text)
             if role and text:
                 messages.append(
                     ImportedMessage(
@@ -166,7 +203,13 @@ def parse_claude(data: list[Any]) -> Iterator[ImportedConversation]:
 
 # ---------- Gemini (Google Takeout, My Activity) ----------
 
-_PROMPT_PREFIX = re.compile(r"^(Prompted|Eingegebener Prompt:|Prompt:|Requête :|Solicitaste)\s*")
+_PROMPT_PREFIX = re.compile(
+    r"^(Prompted|Eingegebener Prompt:|Prompt eingegeben:|Prompt:|Requête :|Prompt saisi :|"
+    r"Solicitaste|Instrucción:|Prompt inserito:|Prompt enviado:)\s*"
+)
+# Activity records that aren't prompts ("Used Gemini Apps", "Created Gemini Canvas …").
+_NOT_PROMPT = re.compile(r"^(Used|Created|Gave|Cleared|Deleted|Shared|Selected|Viewed|Visited)\b")
+_CHAT_LINK = re.compile(r"gemini\.google\.com/(?:u/\d+/)?app/([0-9a-zA-Z]+)")
 
 
 class _Text(HTMLParser):
@@ -189,12 +232,29 @@ def html_to_text(markup: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
+def _chat_id(entry: dict[str, Any]) -> str | None:
+    """The Gemini chat a record belongs to, from its link (details[].url or titleUrl)."""
+    urls = [entry.get("titleUrl")] + [
+        d.get("url") for d in entry.get("details") or [] if isinstance(d, dict)
+    ]
+    for url in urls:
+        match = _CHAT_LINK.search(str(url or ""))
+        if match:
+            return match.group(1)
+    return None
+
+
 def parse_gemini_activity(data: list[Any]) -> Iterator[ImportedConversation]:
-    turns = []
-    for entry in data:
-        if not isinstance(entry, dict) or not isinstance(entry.get("title"), str):
+    entries = [e for e in data if isinstance(e, dict) and isinstance(e.get("title"), str)]
+    # When records carry a prompt prefix, only those are prompts; else skip known non-prompts.
+    prefixed = any(_PROMPT_PREFIX.match(e["title"]) for e in entries)
+    by_chat: dict[str, list[tuple[float, str, str, str]]] = {}
+    loose: list[tuple[float, str, str, str]] = []
+    for entry in entries:
+        title = entry["title"]
+        if (prefixed and not _PROMPT_PREFIX.match(title)) or _NOT_PROMPT.match(title):
             continue
-        prompt = clean_text(_PROMPT_PREFIX.sub("", entry["title"]))
+        prompt = clean_text(_PROMPT_PREFIX.sub("", title))
         if not prompt:
             continue
         reply = "\n\n".join(
@@ -202,10 +262,15 @@ def parse_gemini_activity(data: list[Any]) -> Iterator[ImportedConversation]:
             for item in entry.get("safeHtmlItem") or []
             if isinstance(item, dict) and isinstance(item.get("html"), str)
         )
-        turns.append((to_epoch(entry.get("time")), str(entry.get("time")), prompt, reply))
-    turns.sort()
+        turn = (to_epoch(entry.get("time")), str(entry.get("time")), prompt, reply)
+        chat = _chat_id(entry)
+        (by_chat.setdefault(chat, []) if chat else loose).append(turn)
+    for chat, turns in by_chat.items():
+        yield _gemini_conversation(sorted(turns), f"chat:{chat}")
+    # Records without a chat link: split into sessions on 30-minute gaps.
+    loose.sort()
     session: list[tuple[float, str, str, str]] = []
-    for turn in turns:
+    for turn in loose:
         if session and turn[0] - session[-1][0] > GEMINI_SESSION_GAP:
             yield _gemini_conversation(session)
             session = []
@@ -214,7 +279,9 @@ def parse_gemini_activity(data: list[Any]) -> Iterator[ImportedConversation]:
         yield _gemini_conversation(session)
 
 
-def _gemini_conversation(session: list[tuple[float, str, str, str]]) -> ImportedConversation:
+def _gemini_conversation(
+    session: list[tuple[float, str, str, str]], external_id: str | None = None
+) -> ImportedConversation:
     messages = []
     for ts, key, prompt, reply in session:
         messages.append(
@@ -228,7 +295,7 @@ def _gemini_conversation(session: list[tuple[float, str, str, str]]) -> Imported
             )
     return ImportedConversation(
         source="gemini-web",
-        external_id=f"session:{session[0][1]}",
+        external_id=external_id or f"session:{session[0][1]}",
         title=None,
         messages=messages,
     )
@@ -242,10 +309,10 @@ def _json_documents(path: Path) -> Iterator[tuple[str, Any]]:
         with zipfile.ZipFile(path) as zf:
             for name in zf.namelist():
                 base = name.rsplit("/", 1)[-1]
-                if (
-                    base.startswith("conversations")
-                    and base.endswith(".json")
-                    or (base == "MyActivity.json" and "Gemini" in name)
+                # Gemini: any JSON under a "Gemini…" folder; Takeout localizes file names
+                # (MyActivity.json, MeineAktivitäten.json, …), and detect() checks content.
+                if base.endswith(".json") and (
+                    base.startswith("conversations") or "gemini" in name.lower()
                 ):
                     with zf.open(name) as fh:
                         yield name, _load(fh.read())

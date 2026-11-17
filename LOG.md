@@ -219,3 +219,13 @@ Measured on a real memory (60 conversations, 7,000 messages), warm:
 - `anamnesis-cli` 0.1.0 is on PyPI (https://pypi.org/project/anamnesis-cli/), published by `release.yml` with trusted publishing when the `v0.1.0` tag was pushed. `uvx --from anamnesis-cli anam`, `uv tool install anamnesis-cli` and `pipx install anamnesis-cli` work.
 - `install.sh` installs the latest PyPI release instead of `main` (`ANAMNESIS_SOURCE=git+https://github.com/devHaitham481/anamnesis` still gets main). README and website show the PyPI commands; README has a PyPI badge.
 - Releasing from now on: bump `version` in pyproject.toml, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+## 2026-11-17 — Importers checked against current formats
+
+Checked against open-source parsers and docs updated in 2025–26 (no Cursor install or exports on this machine yet; real exports pending).
+
+- **Cursor:** long conversations keep their ordering in `composerConvHeaders:<id>:<n>` chunks and imported empty; they now import. Answers that also carry reasoning (`thinking`) were dropped; now only bubbles without visible text are skipped. Project falls back to `trackedGitRepos[0].repoPath`. Subagents are recognised by `subagentInfo.parentComposerId`. Keys are read by index range instead of `LIKE` (databases reach many GB).
+- **ChatGPT:** voice turns (`audio_transcription`) kept, web-search citation markers stripped, images shown as `[image]`, and without `current_node` the newest leaf's branch is used instead of all branches mixed.
+- **claude.ai:** the `text` fallback ("This block is not supported on your current device yet.") is only used when `content` is empty; pasted attachments are kept (up to 20,000 characters); a large export's download manifest gets a clear message.
+- **Gemini Takeout:** records are grouped by their chat link (`gemini.google.com/app/<id>`), with the 30-minute rule only for records without one; "Used Gemini Apps", "Created …" etc. are no longer imported as prompts; more localized prompt prefixes; localized folder and file names work.
+- Not yet imported: the Cursor agent CLI (`~/.cursor/chats/*/store.db`) and Cursor's `agent-transcripts` copies.

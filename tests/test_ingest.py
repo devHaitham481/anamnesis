@@ -391,6 +391,56 @@ def test_cursor_composer_bubbles(tmp_path: Path) -> None:
     assert src.signature(db)
 
 
+def test_cursor_current_format_header_chunks(tmp_path: Path) -> None:
+    """Cursor _v 16: ordering in composerConvHeaders chunks, reasoning answers, repo path."""
+    db = tmp_path / "state.vscdb"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value BLOB)")
+    rows: dict[str, object] = {
+        "composerData:c9": {
+            "_v": 16,
+            "composerId": "c9",
+            "name": "Fix login",
+            "createdAt": 1793527200000,
+            "fullConversationHeadersOnly": [],
+            "headerLog": {"count": 3, "chunkCount": 2},
+            "trackedGitRepos": [{"repoPath": "/Users/me/app"}],
+        },
+        "composerConvHeaders:c9:000000": [{"bubbleId": "u1", "type": 1}],
+        "composerConvHeaders:c9:000001": [
+            {"bubbleId": "a1", "type": 2},
+            {"bubbleId": "a2", "type": 2},
+        ],
+        "bubbleId:c9:u1": {"_v": 3, "type": 1, "text": "Why does login 500?"},
+        "bubbleId:c9:a1": {"_v": 3, "type": 2, "text": "", "toolFormerData": {"name": "read"}},
+        "bubbleId:c9:a2": {
+            "_v": 3,
+            "type": 2,
+            "text": "The session key is unset.",
+            "thinking": {"text": "check env"},
+        },
+        "bubbleId:c99:zz": {"type": 1, "text": "another chat's bubble (same prefix start)"},
+        "composerData:sub": {
+            "composerId": "sub",
+            "subagentInfo": {"parentComposerId": "c9"},
+            "conversation": [{"type": 1, "text": "subagent"}],
+        },
+    }
+    conn.executemany(
+        "INSERT INTO cursorDiskKV VALUES (?, ?)", [(k, json.dumps(v)) for k, v in rows.items()]
+    )
+    conn.commit()
+    conn.close()
+    convs = {c.external_id: c for c in CursorSource(db).parse(db)}
+    assert set(convs) == {"c9"}
+    c9 = convs["c9"]
+    assert c9.project == "/Users/me/app" and c9.title == "Fix login"
+    assert [(m.role, m.content) for m in c9.messages] == [
+        ("user", "Why does login 500?"),
+        ("assistant", "The session key is unset."),
+    ]
+
+
 # ---------- web exports ----------
 
 CHATGPT = [
@@ -550,3 +600,144 @@ def test_unknown_export_is_rejected(tmp_path: Path) -> None:
     h.write_text("<html></html>")
     with pytest.raises(ExportFormatError, match="JSON"):
         list(parse_export(h))
+
+
+def test_chatgpt_voice_citations_images_and_missing_current_node(tmp_path: Path) -> None:
+    conv = {
+        "id": "c1",
+        "title": "Voice",
+        "create_time": 1760000000,
+        "current_node": "a",
+        "mapping": {
+            "r": {"id": "r", "parent": None, "children": ["u"], "message": None},
+            "u": {
+                "id": "u",
+                "parent": "r",
+                "children": ["a"],
+                "message": {
+                    "id": "u",
+                    "author": {"role": "user"},
+                    "recipient": "all",
+                    "content": {
+                        "content_type": "multimodal_text",
+                        "parts": [
+                            {"content_type": "audio_transcription", "text": "what's the weather"},
+                            {
+                                "content_type": "audio_asset_pointer",
+                                "asset_pointer": "sediment://x",
+                            },
+                            {"content_type": "image_asset_pointer", "asset_pointer": "file://y"},
+                        ],
+                    },
+                },
+            },
+            "a": {
+                "id": "a",
+                "parent": "u",
+                "children": [],
+                "message": {
+                    "id": "a",
+                    "author": {"role": "assistant"},
+                    "recipient": "all",
+                    "metadata": {"model_slug": "gpt-5"},
+                    "content": {
+                        "content_type": "text",
+                        "parts": ["Sunny citeturn0search0."],
+                    },
+                },
+            },
+        },
+    }
+    path = tmp_path / "conversations-000.json"
+    path.write_text(json.dumps([conv]))
+    [c] = parse_export(path)
+    assert [m.content for m in c.messages] == ["what's the weather\n\n[image]", "Sunny."]
+    del conv["current_node"]  # newest leaf is used, never every branch mixed together
+    path.write_text(json.dumps([conv]))
+    [c] = parse_export(path)
+    assert [m.role for m in c.messages] == ["user", "assistant"]
+
+
+def test_claude_export_placeholder_attachments_and_manifest(tmp_path: Path) -> None:
+    conv = {
+        "uuid": "k",
+        "name": "",
+        "created_at": "2026-10-01T12:00:00Z",
+        "chat_messages": [
+            {
+                "uuid": "m1",
+                "sender": "human",
+                "text": "Review this",
+                "content": [{"type": "text", "text": "Review this"}],
+                "attachments": [{"file_name": "notes.txt", "extracted_content": "TODO list"}],
+            },
+            {
+                "uuid": "m2",
+                "sender": "assistant",
+                "text": "```\nThis block is not supported on your current device yet.\n```",
+                "content": [{"type": "tool_use", "name": "artifacts", "input": {}}],
+            },
+            {"uuid": "m3", "sender": "assistant", "text": "Looks good.", "content": []},
+        ],
+    }
+    path = tmp_path / "conversations.json"
+    path.write_text(json.dumps([conv]))
+    [c] = parse_export(path)
+    assert [m.content for m in c.messages] == [
+        "Review this\n\n[notes.txt]\nTODO list",
+        "Looks good.",
+    ]
+    manifest = tmp_path / "export.json"
+    manifest.write_text(json.dumps({"data_files": [{"filename": "batch-0000.zip"}]}))
+    with pytest.raises(ExportFormatError, match="batch"):
+        list(parse_export(manifest))
+
+
+def test_gemini_takeout_chat_links_noise_and_localized_names(tmp_path: Path) -> None:
+    link = {"url": "https://gemini.google.com/u/1/app/0123456789abcdef"}
+    records = [
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted hi",
+            "time": "2026-09-01T10:00:00Z",
+            "products": ["Gemini Apps"],
+            "details": [link],
+            "safeHtmlItem": [{"html": "<p>Hello</p>"}],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Used Gemini Apps",
+            "time": "2026-09-01T10:01:00Z",
+            "products": ["Gemini Apps"],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Created Gemini Canvas titled Plan",
+            "time": "2026-09-01T10:02:00Z",
+            "products": ["Gemini Apps"],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted later",
+            "time": "2026-09-01T12:00:00Z",
+            "products": ["Gemini Apps"],
+            "details": [link],
+            "safeHtmlItem": [{"html": "ok"}],
+        },
+        {
+            "header": "Gemini Apps",
+            "title": "Prompted unlinked",
+            "time": "2026-09-02T09:00:00Z",
+            "products": ["Gemini Apps"],
+        },
+    ]
+    zpath = tmp_path / "takeout.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr(
+            "Takeout/Meine Aktivitäten/Gemini-Apps/MeineAktivitäten.json", json.dumps(records)
+        )
+    convs = sorted(parse_export(zpath), key=lambda c: c.external_id)
+    assert [c.external_id for c in convs][0] == "chat:0123456789abcdef"
+    linked = convs[0]
+    assert [m.content for m in linked.messages] == ["hi", "Hello", "later", "ok"]
+    assert len(convs) == 2 and convs[1].messages[0].content == "unlinked"

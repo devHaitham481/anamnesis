@@ -2,7 +2,9 @@
 
 Closed, reverse-engineered format: `cursorDiskKV` rows `composerData:<id>` (session, with
 `fullConversationHeadersOnly` ordering) and `bubbleId:<id>:<bubble>` (one message each;
-type 1 = user, 2 = assistant). Older builds kept bubbles inline in `conversation[]`.
+type 1 = user, 2 = assistant). Long conversations keep their ordering in chunk rows
+`composerConvHeaders:<id>:<000000>` instead. Older builds kept bubbles inline in
+`conversation[]`. Keys are read by range, never with LIKE: these databases reach many GB.
 """
 
 from __future__ import annotations
@@ -52,12 +54,9 @@ class CursorSource:
         with _open_readonly(path) as conn:
             if not _has_table(conn, "cursorDiskKV"):
                 return
-            rows = conn.execute(
-                "SELECT key, value FROM cursorDiskKV WHERE key LIKE 'composerData:%'"
-            ).fetchall()
-            for key, raw in rows:
+            for key, raw in _prefixed(conn, "composerData:"):
                 data = _json(raw)
-                if not isinstance(data, dict) or data.get("isSubagent"):
+                if not isinstance(data, dict) or _is_subagent(data):
                     continue
                 composer_id = str(data.get("composerId") or key.split(":", 1)[1])
                 conv = self._conversation(conn, composer_id, data)
@@ -70,13 +69,16 @@ class CursorSource:
         created = to_epoch(data.get("createdAt"))
         bubbles: list[dict[str, Any]] = []
         headers = data.get("fullConversationHeadersOnly")
-        if isinstance(headers, list) and headers:
+        if not (isinstance(headers, list) and headers):
+            headers = []
+            for _, raw in _prefixed(conn, f"composerConvHeaders:{composer_id}:"):
+                chunk = _json(raw)
+                if isinstance(chunk, list):
+                    headers.extend(chunk)
+        if headers:
             stored = {
                 k.rsplit(":", 1)[1]: _json(v)
-                for k, v in conn.execute(
-                    "SELECT key, value FROM cursorDiskKV WHERE key LIKE ?",
-                    (f"bubbleId:{composer_id}:%",),
-                )
+                for k, v in _prefixed(conn, f"bubbleId:{composer_id}:")
             }
             for h in headers:
                 bubble = stored.get(str(h.get("bubbleId"))) if isinstance(h, dict) else None
@@ -87,8 +89,10 @@ class CursorSource:
         messages = []
         for i, b in enumerate(bubbles):
             role = {1: "user", 2: "assistant", "user": "user", "ai": "assistant"}.get(b.get("type"))
-            if role is None or b.get("toolFormerData") or b.get("thinking"):
+            if role is None:
                 continue
+            # Tool calls and reasoning are skipped, but an answer that also carries reasoning
+            # (`thinking`) still has its visible `text`: keep that.
             text = clean_text(str(b.get("text") or b.get("rawText") or ""))
             if not text:
                 continue
@@ -104,19 +108,40 @@ class CursorSource:
             )
         if not messages:
             return None
-        workspace = data.get("workspaceIdentifier")
-        project = None
-        if isinstance(workspace, dict):
-            uri = workspace.get("uri")
-            if isinstance(uri, dict):
-                project = uri.get("fsPath") or uri.get("path")
         return ImportedConversation(
             source=self.name,
             external_id=composer_id,
             title=data.get("name") or None,
-            project=project,
+            project=_project(data),
             messages=messages,
         )
+
+
+def _project(data: dict[str, Any]) -> str | None:
+    """The workspace folder, else the first git repo the chat touched."""
+    workspace = data.get("workspaceIdentifier")
+    if isinstance(workspace, dict):
+        uri = workspace.get("uri")
+        if isinstance(uri, dict) and (uri.get("fsPath") or uri.get("path")):
+            return str(uri.get("fsPath") or uri.get("path"))
+    repos = data.get("trackedGitRepos")
+    if isinstance(repos, list) and repos and isinstance(repos[0], dict):
+        return repos[0].get("repoPath") or None
+    return None
+
+
+def _is_subagent(data: dict[str, Any]) -> bool:
+    info = data.get("subagentInfo")
+    return bool(data.get("isSubagent") or (isinstance(info, dict) and info.get("parentComposerId")))
+
+
+def _prefixed(conn: sqlite3.Connection, prefix: str) -> list[tuple[str, Any]]:
+    """Rows whose key starts with `prefix`, as an index range scan (LIKE can't use the index)."""
+    end = prefix[:-1] + chr(ord(prefix[-1]) + 1)
+    return conn.execute(
+        "SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key",
+        (prefix, end),
+    ).fetchall()
 
 
 class _open_readonly:  # noqa: N801 - used as a context manager
