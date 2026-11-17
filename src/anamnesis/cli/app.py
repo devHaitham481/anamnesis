@@ -197,7 +197,7 @@ class AnamnesisApp(App[None]):
         if self.service is None:
             return
         counts = await self.svc.source_counts()
-        mode = "semantic search" if self.svc.index else "keyword search only"
+        mode = "semantic search" if self.svc.semantic else "keyword search only"
         n, k = sum(counts.values()), len(counts)
         self.query_one("#status", Static).update(
             f"{n} conversation{'s' if n != 1 else ''} · {k} tool{'s' if k != 1 else ''} · {mode}"

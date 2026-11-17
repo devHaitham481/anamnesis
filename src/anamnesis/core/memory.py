@@ -75,6 +75,13 @@ class MemoryService:
         except Exception as e:  # offline first run, corrupted cache, ...
             log.warning("Semantic memory disabled (embedder unavailable): %s", e)
 
+    @property
+    def semantic(self) -> bool:
+        """Semantic search is on: the index is open, or still loading in the background."""
+        if self.index is not None:
+            return True
+        return self._index_task is not None and not self._index_task.done()
+
     async def _index_ready(self) -> None:
         if self._index_task is not None:
             await asyncio.shield(self._index_task)
