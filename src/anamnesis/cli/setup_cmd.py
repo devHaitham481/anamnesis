@@ -59,7 +59,7 @@ def _cmd(text: str) -> Text:
 
 def run(settings: Settings, args: argparse.Namespace) -> int:
     from anamnesis.cli import archive_view
-    from anamnesis.cli.__main__ import cmd_sync
+    from anamnesis.cli.__main__ import _tilde, cmd_sync
     from anamnesis.connect import targets
     from anamnesis.retention import (
         claude_code_cleanup_days,
@@ -72,7 +72,7 @@ def run(settings: Settings, args: argparse.Namespace) -> int:
     con = console()
     con.print()
     con.print(Text.assemble(pill("ANAMNESIS"), ("  setup", f"bold {FG}")))
-    con.print(Text(f"  Your archive lives in {settings.data_dir}", style=MUTED))
+    con.print(Text(f"  Your archive lives in {_tilde(settings.data_dir)}", style=MUTED))
 
     _step(1, "AI tools on this computer")
     tools = targets()

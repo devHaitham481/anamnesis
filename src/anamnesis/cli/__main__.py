@@ -178,6 +178,14 @@ def cmd_search(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _tilde(path: Path) -> str:
+    """~/… for paths in your home folder (shorter, and doesn't print your username)."""
+    try:
+        return "~/" + str(path.resolve().relative_to(Path.home().resolve()))
+    except ValueError:
+        return str(path)
+
+
 def tool_states() -> list[tuple[str, str]]:
     from anamnesis.connect import targets
 
@@ -203,7 +211,7 @@ def cmd_status(settings: Settings, _: argparse.Namespace) -> int:
     con = console()
     con.print()
     con.print(archive_view.render_archive(archive, retention_days=claude_code_cleanup_days()))
-    con.print(Text(f"  {settings.data_dir}", style=MUTED))
+    con.print(Text(f"  {_tilde(settings.data_dir)}", style=MUTED))
     con.print()
     con.print(archive_view.render_lookups(archive))
     con.print()
