@@ -36,6 +36,8 @@ def jsonl(path: Path, records: list[dict[str, object]]) -> Path:
         ('<pasted_content id="1">the pasted text</pasted_content>', "the pasted text"),
         ("<command-name>/review</command-name><command-args>PR 12</command-args>", "/review PR 12"),
         ("<environment_context>cwd</environment_context>", ""),
+        ("<session_context>\nThis is the Gemini CLI. We are setting up the context", ""),
+        ("<user_shell_command>\n<command>ls</command>\n</user_shell_command>", ""),
         ("x" * 30_000, "x" * 20_000 + "\n…[truncated]"),
     ],
 )

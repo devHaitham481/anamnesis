@@ -21,6 +21,7 @@ _NOISE_PREFIXES = (
     "<user_instructions>",
     "# AGENTS.md instructions",
     "<turn_aborted>",
+    "<session_context>",  # Gemini CLI's environment preamble
     # Codex context injected as user messages (codex-rs contextual_user_message.rs)
     "<user_shell_command>",
     "<subagent_notification>",
