@@ -1,0 +1,12 @@
+{"timestamp":"2026-11-16T10:00:00.000Z","type":"session_meta","payload":{"session_id":"019a8f00-0000-7000-8000-000000000001","id":"019a8f00-0000-7000-8000-000000000001","timestamp":"2026-11-16T10:00:00.000Z","cwd":"/Users/me/api","originator":"codex_cli_rs","cli_version":"0.170.0","source":"cli","model_provider":"openai","history_mode":"legacy","git":{"branch":"main"}}}
+{"timestamp":"2026-11-16T10:00:00.010Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions>..."}]}}
+{"timestamp":"2026-11-16T10:00:00.020Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /Users/me/api\n\n<INSTRUCTIONS>...</INSTRUCTIONS>"},{"type":"input_text","text":"<environment_context>\n  <cwd>/Users/me/api</cwd>\n</environment_context>"}]}}
+{"timestamp":"2026-11-16T10:00:01.000Z","type":"turn_context","payload":{"turn_id":"t1","cwd":"/Users/me/api","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write"},"model":"gpt-5.5-codex","effort":"medium","summary":"none"}}
+{"timestamp":"2026-11-16T10:00:01.010Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Add a retry to fetch()"}]}}
+{"timestamp":"2026-11-16T10:00:01.020Z","type":"event_msg","payload":{"type":"user_message","message":"Add a retry to fetch()","images":[]}}
+{"timestamp":"2026-11-16T10:00:03.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"gAAA"}}
+{"timestamp":"2026-11-16T10:00:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Added backoff."}],"phase":"final_answer"}}
+{"timestamp":"2026-11-16T10:00:04.010Z","type":"event_msg","payload":{"type":"agent_message","message":"Added backoff.","phase":"final_answer"}}
+{"timestamp":"2026-11-16T10:00:05.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<user_shell_command>\n<command>ls</command>\n<result>ok</result>\n</user_shell_command>"}]}}
+{"timestamp":"2026-11-16T10:00:06.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Undo that please"}]}}
+{"timestamp":"2026-11-16T10:00:07.000Z","type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}

@@ -1,0 +1,8 @@
+{"sessionId":"5f1c9a2e-0000-4000-8000-000000000001","projectHash":"site","startTime":"2026-11-16T09:00:00.000Z","lastUpdated":"2026-11-16T09:00:00.000Z","kind":"main"}
+{"id":"u1","timestamp":"2026-11-16T09:00:05.000Z","type":"user","content":[{"text":"Explain @src/auth.ts"},{"text":"\n--- Content from referenced files ---\nexport function login() {}\n--- End of content ---"}],"displayContent":[{"text":"Explain @src/auth.ts"}]}
+{"$set":{"lastUpdated":"2026-11-16T09:00:05.000Z"}}
+{"id":"g1","timestamp":"2026-11-16T09:00:09.000Z","type":"gemini","content":"","thoughts":[{"subject":"Reading","description":"open file","timestamp":"2026-11-16T09:00:08.000Z"}],"tokens":null,"model":"gemini-3-pro-preview","toolCalls":[{"id":"t1","name":"read_file","args":{"path":"src/auth.ts"},"status":"success","timestamp":"2026-11-16T09:00:09.000Z"}]}
+{"$patch":{"id":"g1","toolCalls":[{"id":"t1","result":[{"functionResponse":{"name":"read_file","response":{"output":"..."}}}]}]}}
+{"id":"g2","timestamp":"2026-11-16T09:00:12.000Z","type":"gemini","content":"`login()` is the entry point.","thoughts":[],"tokens":{"input":900,"output":12,"cached":0,"total":912},"model":"gemini-3-pro-preview"}
+{"id":"i1","timestamp":"2026-11-16T09:00:13.000Z","type":"info","content":"Request cancelled."}
+{"$set":{"summary":"Auth entry point"}}

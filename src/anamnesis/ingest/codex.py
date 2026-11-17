@@ -19,6 +19,17 @@ from anamnesis.ingest.base import text_of, to_epoch
 from anamnesis.ingest.clean import clean_text
 
 _UUID = re.compile(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+# After `thread/revert`, a thread continues in rollout-<ts>-<thread>_<rollout>.jsonl.
+_REVERT = re.compile(r"_([0-9a-zA-Z-]+)\.jsonl(?:\.zst)?$")
+_INTERNAL_SOURCES = {"guardian_review", "memory_consolidation", "subagent"}
+
+
+def _internal(payload: dict[str, Any]) -> bool:
+    """Sessions Codex runs for itself (reviews, memory, subagents), not conversations."""
+    source = payload.get("source")
+    if isinstance(source, dict) and ({"subagent", "internal"} & set(source)):
+        return True
+    return payload.get("thread_source") in _INTERNAL_SOURCES
 
 
 def codex_home() -> Path:
@@ -55,14 +66,16 @@ class CodexSource:
         model: str | None = None
         items: list[ImportedMessage] = []
         events: list[ImportedMessage] = []
+        revert = _REVERT.search(path.name)
+        prefix = f"{revert.group(1)}:" if revert else ""  # its ordinals restart: keep them apart
         for n, record in enumerate(_json_lines(_read(path))):
             kind = record.get("type")
             payload = record.get("payload") if isinstance(record.get("payload"), dict) else None
             ts = to_epoch(record.get("timestamp"))
-            ext = str(record.get("ordinal", n))
+            ext = prefix + str(record.get("ordinal", n))
             if kind == "session_meta" and payload is not None:
-                if payload.get("parent_thread_id"):
-                    return  # a subagent's thread; its parent session holds the conversation
+                if payload.get("parent_thread_id") or _internal(payload):
+                    return  # a subagent's or Codex's own thread, not a conversation
                 session_id = payload.get("id") or session_id
                 cwd = payload.get("cwd") or cwd
                 continue
@@ -74,6 +87,10 @@ class CodexSource:
                 continue
             if kind == "event_msg" and payload is not None:
                 ptype = payload.get("type")
+                if ptype == "thread_rolled_back":  # the last N turns were undone
+                    turns = int(payload.get("num_turns") or 0)
+                    items, events = _drop_turns(items, turns), _drop_turns(events, turns)
+                    continue
                 role = {"user_message": "user", "agent_message": "assistant"}.get(ptype or "")
                 text = clean_text(payload.get("message") or "") if role else ""
                 if role and text:
@@ -85,6 +102,8 @@ class CodexSource:
             role = item.get("role")
             if role not in ("user", "assistant"):
                 continue  # developer/system prompts
+            if item.get("phase") == "commentary":
+                continue  # progress narration mid-turn, not the answer
             text = clean_text(text_of(item.get("content")))
             if text:
                 items.append(_msg(ext, role, text, ts or to_epoch(item.get("timestamp")), model))
@@ -102,6 +121,16 @@ class CodexSource:
             project=cwd,
             messages=messages,
         )
+
+
+def _drop_turns(messages: list[ImportedMessage], turns: int) -> list[ImportedMessage]:
+    """Remove the last `turns` turns (each starts at a user message)."""
+    if turns <= 0:
+        return messages
+    starts = [i for i, m in enumerate(messages) if m.role == "user"]
+    if not starts:
+        return messages
+    return messages[: starts[-turns]] if turns <= len(starts) else []
 
 
 def _msg(ext: str, role: str, text: str, ts: float, model: str | None) -> ImportedMessage:

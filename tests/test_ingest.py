@@ -741,3 +741,29 @@ def test_gemini_takeout_chat_links_noise_and_localized_names(tmp_path: Path) -> 
     linked = convs[0]
     assert [m.content for m in linked.messages] == ["hi", "Hello", "later", "ok"]
     assert len(convs) == 2 and convs[1].messages[0].content == "unlinked"
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_gemini_cli_current_format_fixture() -> None:
+    """gemini-cli 0.68: displayContent (not the @file-expanded prompt), subagents skipped."""
+    src = GeminiCliSource([FIXTURES / "gemini_cli" / "tmp"])
+    convs = [c for p in src.discover() for c in src.parse(p)]
+    assert len(convs) == 1
+    assert convs[0].title == "Auth entry point"
+    assert [(m.role, m.content) for m in convs[0].messages] == [
+        ("user", "Explain @src/auth.ts"),
+        ("assistant", "`login()` is the entry point."),
+    ]
+
+
+def test_codex_current_format_fixture() -> None:
+    """codex 0.170: injected context and shell commands skipped, rolled-back turns dropped."""
+    src = CodexSource(FIXTURES / "codex")
+    convs = [c for p in src.discover() for c in src.parse(p)]
+    assert len(convs) == 1 and convs[0].project == "/Users/me/api"
+    assert [(m.role, m.content) for m in convs[0].messages] == [
+        ("user", "Add a retry to fetch()"),
+        ("assistant", "Added backoff."),
+    ]

@@ -21,6 +21,16 @@ _NOISE_PREFIXES = (
     "<user_instructions>",
     "# AGENTS.md instructions",
     "<turn_aborted>",
+    # Codex context injected as user messages (codex-rs contextual_user_message.rs)
+    "<user_shell_command>",
+    "<subagent_notification>",
+    "<skill>",
+    "<codex_internal_context",
+    "<goal_context>",
+    "<agent_message_board_notification>",
+    "<recommended_plugins>",
+    "<external_",
+    "<hook_prompt",
 )
 
 _SYSTEM_BLOCK = re.compile(

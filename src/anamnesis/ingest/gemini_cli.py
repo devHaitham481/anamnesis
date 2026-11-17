@@ -8,6 +8,7 @@ Legacy `session-*.json` files hold one ConversationRecord object.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
@@ -19,7 +20,8 @@ from anamnesis.ingest.clean import clean_text
 
 def gemini_roots() -> list[Path]:
     home = Path.home()
-    return [home / ".gemini" / "tmp", home / ".cache" / ".gemini" / "tmp"]
+    cli_home = Path(os.environ.get("GEMINI_CLI_HOME") or home)
+    return [cli_home / ".gemini" / "tmp", home / ".cache" / ".gemini" / "tmp"]
 
 
 def gemini_text(content: Any) -> str:
@@ -52,7 +54,12 @@ class GeminiCliSource:
         for root in self.roots:
             if root.is_dir():
                 found += root.glob("*/chats/session-*.jsonl")
-                found += root.glob("*/chats/session-*.json")
+                # A resumed legacy .json session is migrated to .jsonl (the .json stays behind).
+                found += [
+                    p
+                    for p in root.glob("*/chats/session-*.json")
+                    if not p.with_suffix(".jsonl").exists()
+                ]
         return sorted(found)
 
     def _project(self, path: Path) -> str | None:
@@ -88,7 +95,9 @@ class GeminiCliSource:
         out = []
         for m in messages:
             role = {"user": "user", "gemini": "assistant"}.get(m.get("type", ""))
-            body = clean_text(gemini_text(m.get("content")))
+            # `displayContent` is what you typed; `content` has @file contents inlined.
+            shown = m.get("displayContent") if role == "user" else None
+            body = clean_text(gemini_text(shown if shown else m.get("content")))
             if role and body and m.get("id"):
                 out.append(
                     ImportedMessage(
@@ -137,13 +146,14 @@ def _replay(text: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             for rid in patch.get("removeIds") or []:
                 msgs.pop(str(rid), None)
             if isinstance(patch.get("orderIds"), list):
-                order = [str(i) for i in patch["orderIds"]]
+                listed = [str(i) for i in patch["orderIds"]]
+                order = [i for i in order if i not in listed] + listed  # as upstream does
         elif "$rewindTo" in rec:
             target = str(rec["$rewindTo"])
-            if target in order:
-                for rid in order[order.index(target) :]:
-                    msgs.pop(rid, None)
-                order = order[: order.index(target)]
+            cut = order.index(target) if target in order else 0  # unknown id: clear everything
+            for rid in order[cut:]:
+                msgs.pop(rid, None)
+            order = order[:cut]
         elif "sessionId" in rec and "type" not in rec:
             meta.update(rec)
         elif "id" in rec and "type" in rec:
