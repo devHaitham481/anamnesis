@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 
 from rich.text import Text
@@ -27,6 +28,8 @@ def _ask(question: str, assume_yes: bool) -> bool | None:
         return True
     if not sys.stdin.isatty():
         return None
+    with contextlib.suppress(ImportError):
+        import readline  # noqa: F401  (arrow keys and line editing at the prompt)
     try:
         answer = input(f"{PAD}{question} [Y/n] ").strip().lower()
     except EOFError:

@@ -208,3 +208,8 @@ Measured on a real memory (60 conversations, 7,000 messages), warm:
 - **`anam search`:** one result per conversation, styled like the TUI.
 - **TUI vim keys:** `j`/`k`, `g`/`G`, `Ctrl+D`/`Ctrl+U` in the list and the conversation; `l` opens, `h` goes back; `/` jumps to the search box, where typing fuzzy-filters the list (fzf-style, on title, project and tool) and Enter searches every message; `Esc` clears, then returns to the list.
 - **Tests:** +3 (vim keys, fuzzy filter, fuzzy ranking); 114 pass.
+
+## 2026-11-17 — No tracebacks
+
+- `anam` catches Ctrl+C ("Cancelled.", exit 130), broken pipes (`anam search … | head`) and unexpected errors: one line naming the error, where the full traceback was logged (`~/.anamnesis/anamnesis.log`) and where to report it. `ANAMNESIS_DEBUG=1` shows the traceback instead.
+- Setup prompts load `readline`, so arrow keys edit the answer instead of printing `^[[D`.

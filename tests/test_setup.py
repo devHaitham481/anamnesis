@@ -103,3 +103,34 @@ def test_setup_offers_to_keep_claude_code_history(
     assert json.loads((home / ".claude" / "settings.json").read_text())["cleanupPeriodDays"] > 30
     assert main(["setup", "--yes", "--skip-import"]) == 0
     assert "Nothing to change" in capsys.readouterr().out
+
+
+def test_ctrl_c_and_crashes_end_in_one_line(
+    home: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (home / ".gemini").mkdir()
+
+    class Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    def interrupted(_: str = "") -> str:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("sys.stdin", Tty(""))
+    monkeypatch.setattr("builtins.input", interrupted)
+    assert main(["setup", "--skip-import"]) == 130
+    err = capsys.readouterr().err
+    assert "Cancelled." in err and "Traceback" not in err
+
+    def boom(*_: object) -> int:
+        raise RuntimeError("disk on fire")
+
+    monkeypatch.delenv("ANAMNESIS_DEBUG", raising=False)
+    monkeypatch.setitem(__import__("anamnesis.cli.__main__").cli.__main__.COMMANDS, "status", boom)
+    assert main(["status"]) == 1
+    err = capsys.readouterr().err
+    assert "RuntimeError: disk on fire" in err and "Traceback" not in err
+    assert "Details:" in err and "issues" in err
+    log = Path(err.split("Details: ")[1].split(".log")[0] + ".log")
+    assert "disk on fire" in log.read_text() and "Traceback" in log.read_text()

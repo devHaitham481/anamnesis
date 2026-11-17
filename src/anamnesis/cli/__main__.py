@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -489,13 +491,52 @@ def _search_shorthand(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run a command. Ctrl+C and unexpected errors end in one plain line, never a traceback
+    (it goes to the log; ANAMNESIS_DEBUG=1 shows it here)."""
+    try:
+        return _run(argv)
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        return 130
+    except BrokenPipeError:  # output piped into `head` and the like
+        with contextlib.suppress(Exception):
+            sys.stdout = open(os.devnull, "w")  # noqa: SIM115  (silence the flush at exit)
+        return 0
+    except Exception as e:
+        if os.environ.get("ANAMNESIS_DEBUG"):
+            raise
+        log_file = _log_crash()
+        where = f" Details: {log_file}" if log_file else ""
+        print(f"anam: {type(e).__name__}: {e}.{where}", file=sys.stderr)
+        print(f"Please report it: {ISSUES}", file=sys.stderr)
+        return 1
+
+
+ISSUES = "https://github.com/devHaitham481/anamnesis/issues"
+
+
+def _log_crash() -> Path | None:
+    import traceback
+
+    try:
+        settings = load_settings()
+        settings.data_dir.mkdir(parents=True, exist_ok=True)
+        path = settings.data_dir / "anamnesis.log"
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"\n--- anam {' '.join(sys.argv[1:])}\n{traceback.format_exc()}")
+        return path
+    except Exception:
+        return None
+
+
+def _run(argv: list[str] | None) -> int:
     argv = _search_shorthand(list(sys.argv[1:] if argv is None else argv))
     args = build_parser().parse_args(argv)
     settings = load_settings()
     serving = args.command == "node" and args.node_command == "serve"
     if args.command not in ("tui", None, "mcp") and not serving:
         logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    return COMMANDS[args.command](settings, args)
+    return int(COMMANDS[args.command](settings, args))
 
 
 if __name__ == "__main__":
