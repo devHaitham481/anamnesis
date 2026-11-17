@@ -19,9 +19,9 @@
   <img alt="Works with claude.ai" src="https://img.shields.io/badge/claude.ai-d97757?logo=claude&logoColor=white">
 </p>
 
-<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/status.svg" alt="anam status showing an archive of 804 conversations across five AI tools, then Claude Code answering a question from a decision made in ChatGPT" width="760"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/demo.gif" alt="Demo: anam status shows the archive across eight AI tools, anam searches it from the shell, and the terminal UI filters, opens and searches conversations with vim keys" width="860"></p>
 
-<p align="center"><sub><code>anam status</code>, then Claude Code finding an old ChatGPT decision on its own (sample data).</sub></p>
+<p align="center"><sub><code>anam status</code>, a search from the shell, and the terminal UI (sample data).</sub></p>
 
 Your AI tools don't keep your history for long. Claude Code deletes sessions after 30 days, and web chats stay locked inside their apps. Anamnesis keeps a permanent, word-for-word archive of your conversations from **Claude Code, Codex, Gemini CLI, Cursor, ChatGPT, claude.ai and Gemini** on your computer, and gives it back to every AI tool over [MCP](https://modelcontextprotocol.io). Ask Claude Code "what did we decide about auth?" and it finds the answer, even if you worked it out in ChatGPT months ago.
 
@@ -93,6 +93,8 @@ rm -rf ~/.anamnesis          # your memory; skip this to keep it
 ## Using it
 
 Just keep working. While any connected tool is running, new conversations are archived in the background, and agents search the memory when earlier work comes up.
+
+<p align="center"><img src="https://raw.githubusercontent.com/devHaitham481/anamnesis/main/docs/status.svg" alt="anam status, then Claude Code answering a question from a decision made in ChatGPT" width="720"></p>
 
 ```bash
 anam                         # browse and search everything in the terminal
